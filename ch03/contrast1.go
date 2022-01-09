@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"gocv.io/x/gocv"
-	"gonum.org/v1/gonum/floats"
 	"os"
 )
 
@@ -17,16 +16,21 @@ func main() {
 	dst := gocv.NewMat()
 	defer dst.Close()
 
+	//var alpha uint16 = 2
 	var alpha float64 = 2
 
 	src.ConvertTo(&dst, gocv.MatTypeCV64F)
 	f64bytes, _ := dst.DataPtrFloat64()
+	//f64bytes, _ := dst.DataPtrUint16()
+	for i, v := range f64bytes {
+		f64bytes[i] = v*(1+alpha) - 128*alpha
+	}
 	//floats.AddScaled(f64bytes, alpha, f64bytes)
 	//floats.AddConst(-128*alpha, floats.AddScaledTo(f64bytes, make([]float64, len(f64bytes)), 1+alpha, f64bytes))
 
-	scaleBytes := make([]float64, len(f64bytes))
-	floats.AddConst(-128*alpha, scaleBytes)
-	floats.AddScaledTo(f64bytes, scaleBytes, 1+alpha, f64bytes)
+	//scaleBytes := make([]float64, len(f64bytes))
+	//floats.AddConst(-128*alpha, scaleBytes)
+	//floats.AddScaledTo(f64bytes, scaleBytes, 1+alpha, f64bytes)
 
 	//if err != nil {
 	//	fmt.Println(err.Error())
