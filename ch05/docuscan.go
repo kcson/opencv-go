@@ -46,9 +46,9 @@ func main() {
     //dstQuad := [][]float32{{0, 0}, {0, float32(dh) - 1}, {float32(dw) - 1, float32(dh) - 1}, {float32(dw) - 1, 0}}
     //dragSrc := []bool{false, false, false, false}
 
-    srcW := gocv.NewWindow("src")
-    defer srcW.Close()
-    srcW.IMShow(src)
+    //srcW := gocv.NewWindow("src")
+    //defer srcW.Close()
+    //srcW.IMShow(src)
 
     disp := drawROI(src, srcQuad)
     defer disp.Close()
