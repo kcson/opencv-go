@@ -49,7 +49,7 @@ func main() {
 	defer magWin.Close()
 	magWin.IMShow(mag)
 
-	edge := gocv.Zeros(src.Rows(), src.Cols(),  gocv.MatTypeCV8U)
+	edge := gocv.Zeros(mag.Rows(), mag.Cols(),  gocv.MatTypeCV8U)
 	defer edge.Close()
 
 	//gocv.Threshold(mag, &edge, 80, 255, gocv.ThresholdBinary)
@@ -61,8 +61,6 @@ func main() {
 			}
 		}
 	}
-	dst := gocv.NewMat()
-	defer dst.Close()
 
 	edgeWin := gocv.NewWindow("edge")
 	defer edgeWin.Close()
