@@ -55,4 +55,6 @@ func main() {
     dispW := gocv.NewWindow("disp")
     defer dispW.Close()
     dispW.IMShow(disp)
+
+    gocv.WaitKey(0)
 }
