@@ -9,7 +9,8 @@ import (
 )
 
 func main() {
-    src := gocv.IMRead("imgs/dial.jpg", gocv.IMReadColor)
+    //src := gocv.IMRead("imgs/dial.jpg", gocv.IMReadColor)
+    src := gocv.IMRead("imgs/coins1.jpg", gocv.IMReadColor)
     if src.Empty() {
         fmt.Println("image read fail!!")
         os.Exit(-1)
