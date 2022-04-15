@@ -33,7 +33,7 @@ func main() {
 		if bs < 3 {
 			bs = 3
 		}
-		println(i)
+		println(bs)
 		gocv.AdaptiveThreshold(src, &dst, 255, gocv.AdaptiveThresholdGaussian, gocv.ThresholdBinary, bs, 5)
 		dstWin.IMShow(dst)
 		if gocv.WaitKey(1000) == 27 {
