@@ -8,7 +8,8 @@ import (
 )
 
 func main() {
-	src := gocv.IMRead("imgs/keyboard.bmp", gocv.IMReadGrayScale)
+	//src := gocv.IMRead("imgs/keyboard.bmp", gocv.IMReadGrayScale)
+	src := gocv.IMRead("imgs/vehicle.jpeg", gocv.IMReadGrayScale)
 	if src.Empty() {
 		println("Image load fail!!")
 		os.Exit(1)
@@ -21,7 +22,7 @@ func main() {
 	srcBin := gocv.NewMat()
 	defer srcBin.Close()
 
-	gocv.Threshold(src, &srcBin, 0, 255, gocv.ThresholdOtsu)
+	gocv.Threshold(src, &srcBin, 0, 255, gocv.ThresholdBinaryInv|gocv.ThresholdOtsu)
 	srcBinWin := gocv.NewWindow("src_bin")
 	defer srcBinWin.Close()
 	srcBinWin.IMShow(srcBin)
