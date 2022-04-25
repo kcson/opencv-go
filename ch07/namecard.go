@@ -13,7 +13,7 @@ import (
 func main() {
 	//fileName := "imgs/namecard1.jpg"
 	//fileName := "imgs/test01.jpeg"
-	fileName := "imgs/vehicle.jpeg"
+	fileName := "imgs/vehicle7.jpeg"
 	if len(os.Args) > 1 {
 		fileName = os.Args[1]
 	}
