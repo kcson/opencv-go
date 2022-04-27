@@ -9,10 +9,12 @@ import (
 	"math"
 	"os"
 	"sort"
+	"unicode"
+	"unicode/utf8"
 )
 
 func main() {
-	fileName := "imgs/vehicle.jpeg"
+	fileName := "imgs/vehicle6.jpeg"
 	if len(os.Args) > 1 {
 		fileName = os.Args[1]
 	}
@@ -60,8 +62,8 @@ func main() {
 			minRect = rect
 		}
 	}
-	//minRect.Min = image.Pt(minRect.Min.X-10, minRect.Min.Y-10)
-	//minRect.Max = image.Pt(minRect.Max.X+10, minRect.Max.Y+10)
+	minRect.Min = image.Pt(minRect.Min.X+20, minRect.Min.Y)
+	minRect.Max = image.Pt(minRect.Max.X-20, minRect.Max.Y)
 	gocv.Rectangle(&cpy, minRect, color.RGBA{R: 255}, 4)
 	//dst := srcBin.Region(minRect)
 	dst := cpy.Region(minRect)
@@ -86,17 +88,37 @@ func main() {
 func getOcrText(mat gocv.Mat) string {
 	client := gosseract.NewClient()
 	defer client.Close()
-	gocv.CvtColor(mat, &mat, gocv.ColorBGRToGray)
-	gocv.Threshold(mat, &mat, 0, 255, gocv.ThresholdOtsu|gocv.ThresholdBinaryInv)
+	temp := gocv.NewMat()
+	defer temp.Close()
+	mat.CopyTo(&temp)
+	gocv.CvtColor(temp, &temp, gocv.ColorBGRToGray)
+	gocv.Threshold(temp, &temp, 0, 255, gocv.ThresholdOtsu|gocv.ThresholdBinaryInv)
 	//gocv.MorphologyEx(mat, &mat, gocv.MorphDilate, gocv.NewMat())
 	//gocv.MorphologyEx(mat, &mat, gocv.MorphDilate, gocv.NewMat())
 	//gocv.MorphologyEx(mat, &mat, gocv.MorphDilate, gocv.NewMat())
 	//gocv.MorphologyEx(mat, &mat, gocv.MorphDilate, gocv.NewMat())
 	//gocv.MorphologyEx(mat, &mat, gocv.MorphDilate, gocv.NewMat())
+	contours := gocv.FindContours(temp, gocv.RetrievalTree, gocv.ChainApproxNone)
+	for i := 0; i < contours.Size(); i++ {
+		pts := contours.At(i)
+		rect := gocv.BoundingRect(pts)
+		if !guessVehicleNo(pts) {
+			continue
+		}
+		gocv.Rectangle(&mat, rect, color.RGBA{R: 255}, 4)
+	}
+	//tempWin := gocv.NewWindow("temp")
+	//defer tempWin.Close()
+	//tempWin.IMShow(temp)
 
-	gocv.GaussianBlur(mat, &mat, image.Pt(0, 0), 3, 0, gocv.BorderDefault)
-	gocv.Threshold(mat, &mat, 0, 255, gocv.ThresholdOtsu|gocv.ThresholdBinaryInv)
-	gocv.IMWrite("vehicleNo.jpg", mat)
+	//sigmaX := 1.0
+	text := ""
+	//for sigmaX < 2.0 {
+	//sigmaY := sigmaX * 4
+	gocv.GaussianBlur(temp, &temp, image.Pt(0, 0), 1, 4, gocv.BorderDefault)
+	gocv.Threshold(temp, &temp, 0, 255, gocv.ThresholdOtsu|gocv.ThresholdBinaryInv)
+
+	gocv.IMWrite("vehicleNo.jpg", temp)
 	//err := client.SetImageFromBytes(mat.ToBytes())
 	err := client.SetImage("./vehicleNo.jpg")
 	if err != nil {
@@ -113,12 +135,29 @@ func getOcrText(mat gocv.Mat) string {
 		println(err.Error())
 		return ""
 	}
-	text, err := client.Text()
+	text, err = client.Text()
 	if err != nil {
 		println(err.Error())
 		return ""
 	}
-	return text
+	//println(sigmaX, sigmaY, text)
+	//sigmaX = sigmaX + 0.01
+	//}
+	if len(text) == 0 {
+		return ""
+	}
+	println(text)
+	result := ""
+	b := []byte(text)
+	for i := 0; i < len(b); {
+		r, size := utf8.DecodeRune(b[i:])
+		if unicode.Is(unicode.Hangul, r) || unicode.IsNumber(r) {
+			result = result + string(r)
+		}
+		i += size
+	}
+
+	return result
 }
 
 func transformImage(dst gocv.Mat) gocv.Mat {
