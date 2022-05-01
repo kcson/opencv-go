@@ -87,8 +87,8 @@ func (cvr *CutVehicleRegion) Execute(param *ChainParam) {
 	if minRect.Empty() {
 		param.Dst = gocv.NewMat()
 	} else {
-		minRect.Min.X = minRect.Min.X + 50
-		minRect.Max.X = minRect.Max.X - 50
+		minRect.Min.X = minRect.Min.X + 20
+		minRect.Max.X = minRect.Max.X - 20
 		param.Dst = param.Src.Region(minRect)
 		gocv.Rectangle(&param.Src, minRect, color.RGBA{R: 255}, 3)
 	}
@@ -114,6 +114,8 @@ type GetVehicleNo struct {
 }
 
 func (gvn *GetVehicleNo) Execute(param *ChainParam) {
+	dilateCount := 0 //팽창
+	erodeCount := 2 //침식
 	gray := gocv.NewMat()
 	defer gray.Close()
 	bin := gocv.NewMat()
@@ -122,8 +124,15 @@ func (gvn *GetVehicleNo) Execute(param *ChainParam) {
 	gocv.CvtColor(param.Dst, &gray, gocv.ColorBGRToGray)
 	gocv.GaussianBlur(gray, &bin, image.Pt(0, 0), 1, 4, gocv.BorderDefault)
 	thres := gocv.Threshold(bin, &bin, 0, 255, gocv.ThresholdBinary|gocv.ThresholdOtsu)
-	gocv.MorphologyEx(bin, &bin, gocv.MorphErode, gocv.NewMat())
-	gocv.MorphologyEx(bin, &bin, gocv.MorphErode, gocv.NewMat())
+	//침식
+	for i := 0; i < erodeCount; i++ {
+		gocv.MorphologyEx(bin, &bin, gocv.MorphErode, gocv.NewMat())
+	}
+	// 팽창
+	for i := 0; i < dilateCount; i++ {
+		gocv.MorphologyEx(bin, &bin, gocv.MorphDilate, gocv.NewMat())
+	}
+
 	gocv.CopyMakeBorder(bin, &bin, 10, 10, 10, 10, gocv.BorderConstant, color.RGBA{R: 0, G: 0, B: 0})
 	println("threshold : ", thres)
 
@@ -146,8 +155,14 @@ func (gvn *GetVehicleNo) Execute(param *ChainParam) {
 			println("threshold : ", thres)
 			gocv.GaussianBlur(gray, &bin, image.Pt(0, 0), 1, 4, gocv.BorderDefault)
 			gocv.Threshold(bin, &bin, thres, 255, gocv.ThresholdBinary)
-			gocv.MorphologyEx(bin, &bin, gocv.MorphErode, gocv.NewMat())
-			gocv.MorphologyEx(bin, &bin, gocv.MorphErode, gocv.NewMat())
+			//침식
+			for i := 0; i < erodeCount; i++ {
+				gocv.MorphologyEx(bin, &bin, gocv.MorphErode, gocv.NewMat())
+			}
+			// 팽창
+			for i := 0; i < dilateCount; i++ {
+				gocv.MorphologyEx(bin, &bin, gocv.MorphDilate, gocv.NewMat())
+			}
 			gocv.CopyMakeBorder(bin, &bin, 10, 10, 10, 10, gocv.BorderConstant, color.RGBA{R: 0, G: 0, B: 0})
 			vehicleNo = getTextFromMat(bin)
 			temp = r.FindString(vehicleNo)
@@ -247,7 +262,7 @@ func (rr *ReleaseResource) SetNext(chain Chain) Chain {
 }
 
 func main() {
-	fileName := "imgs/vehicle5.jpeg"
+	fileName := "imgs/vehicle16.jpeg"
 	if len(os.Args) > 1 {
 		fileName = os.Args[1]
 	}
