@@ -262,7 +262,7 @@ func (rr *ReleaseResource) SetNext(chain Chain) Chain {
 }
 
 func main() {
-	fileName := "imgs/vehicle17.jpeg"
+	fileName := "imgs/vehicle18.jpeg"
 	if len(os.Args) > 1 {
 		fileName = os.Args[1]
 	}
