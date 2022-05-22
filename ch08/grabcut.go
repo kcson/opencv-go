@@ -22,13 +22,6 @@ func main() {
 
 	mask := gocv.Zeros(src.Rows(), src.Cols(), gocv.MatTypeCV8U)
 	defer mask.Close()
-	for i := 0; i < mask.Rows(); i++ {
-		for j := 0; j < mask.Cols(); j++ {
-			v := mask.GetUCharAt(i, j)
-			print(v)
-		}
-		print("\n")
-	}
 
 	bgModel := gocv.NewMat()
 	defer bgModel.Close()
@@ -36,13 +29,6 @@ func main() {
 	defer fgModel.Close()
 
 	gocv.GrabCut(src, &mask, rc, &bgModel, &fgModel, 5, gocv.GCInitWithRect)
-	for i := 0; i < mask.Rows(); i++ {
-		for j := 0; j < mask.Cols(); j++ {
-			v := mask.GetUCharAt(i, j)
-			print(v)
-		}
-		print("\n")
-	}
 
 	mask.MultiplyUChar(64)
 

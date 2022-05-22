@@ -21,6 +21,6 @@ dst = src * mask2[:, :, np.newaxis]
 
 # 초기 분할 결과 출력
 cv.imshow('mask', mask * 64)
-# cv2.imshow('dst', dst)
+cv.imshow('dst', dst)
 cv.waitKey()
-cv .destroyAllWindows()
+cv.destroyAllWindows()
