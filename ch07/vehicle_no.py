@@ -22,7 +22,7 @@ class AbstractHandler(Handler):
 
         return handler
 
-    def handle(self, param) -> dict:
+    def handle(self, param) -> dict | None:
         if self._next_handler:
             return self._next_handler.handle(param)
 
