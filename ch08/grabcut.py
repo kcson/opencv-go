@@ -17,6 +17,8 @@ cv.grabCut(src, mask, rc, None, None, 5, cv.GC_INIT_WITH_RECT)
 
 # 0: cv2.GC_BGD, 2: cv2.GC_PR_BGD
 mask2 = np.where((mask == 0) | (mask == 2), 0, 1).astype('uint8')
+
+cv.imshow('mask2', mask2 * 255)
 dst = src * mask2[:, :, np.newaxis]
 
 # 초기 분할 결과 출력
