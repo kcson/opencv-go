@@ -79,6 +79,7 @@ dst = cv2.warpPerspective(src, pers, (dw, dh))
 dst_gray = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
 print(pytesseract.image_to_string(dst_gray, lang='kor+eng'))
 
+cv2.imshow('cpy', cpy)
 cv2.imshow('src', src)
 cv2.imshow('dst', dst)
 cv2.waitKey()
