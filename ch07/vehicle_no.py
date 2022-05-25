@@ -66,13 +66,23 @@ class CutVehicleRegion(AbstractHandler):
         min_area: int = sys.maxsize
         contours, _ = cv.findContours(param.pre, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
         for pts in contours:
+            # 외곽선 근사화
+            approx = cv.approxPolyDP(pts, cv.arcLength(pts, True) * 0.02, True)
+
+            # 컨벡스가 아니고, 사각형이 아니면 무시
+            if not cv.isContourConvex(approx):
+                continue
+            if len(approx) != 4:
+                continue
+
             x, y, w, h = cv.boundingRect(pts)
             if h / w > 0.5:
                 continue
             area = cv.contourArea(pts)
-            if area < 80 * 80:
+            if area < 2000:
                 continue
 
+            # cv.polylines(param.src, [approx], True, (0, 0, 255), 2, cv.LINE_AA)
             count = self.get_connected_components((x, y, w, h))
             if count < 4 or count > 20:
                 continue
@@ -84,7 +94,7 @@ class CutVehicleRegion(AbstractHandler):
         if min_pts is not None:
             x, y, w, h = cv.boundingRect(min_pts)
             param.dst = param.src[y:y + h, x + 20:x + w - 20]
-            cv.rectangle(param.src, (x, y), (x + w, y + h), (0, 0, 255), thickness=3)
+            # cv.rectangle(param.src, (x, y), (x + w, y + h), (0, 0, 255), thickness=3)
 
         return super().handle(param)
 
@@ -151,6 +161,9 @@ class CutVehicleRegion(AbstractHandler):
 
 class GetVehicleNo(AbstractHandler):
     def handle(self, param: ChainParam):
+        if param.dst is None:
+            return super().handle(param)
+
         p = re.compile('[0-9]{2,3}[가-힣]{1}[0-9]{4}|[가-힣]{2}[0-9]{2}[가-힣]{1}[0-9]{4}')
         gray = cv.cvtColor(param.dst, cv.COLOR_BGR2GRAY)
         src_bin = cv.GaussianBlur(gray, (0, 0), 1, sigmaY=4, borderType=cv.BORDER_DEFAULT)
@@ -226,10 +239,10 @@ if __name__ == "__main__":
     pre.set_next(CutVehicleRegion()).set_next(GetVehicleNo())
     pre.handle(chainParam)
 
-    cv.imshow('src', src)
     cv.imshow('pre', chainParam.pre)
     if chainParam.dst is not None:
         cv.imshow('dst', chainParam.dst)
+    cv.imshow('src', src)
     print(chainParam.vehicle_no)
 
     cv.waitKey()
