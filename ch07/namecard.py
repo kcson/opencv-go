@@ -34,7 +34,7 @@ def reorderPts(pts):
 
 
 # 영상 불러오기
-filename = '../imgs/namecard1.jpg'
+filename = '../imgs/namecard.jpg'
 if len(sys.argv) > 1:
     filename = sys.argv[1]
 
