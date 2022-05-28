@@ -70,16 +70,16 @@ class CutVehicleRegion(AbstractHandler):
             approx = cv.approxPolyDP(pts, cv.arcLength(pts, True) * 0.02, True)
 
             # 컨벡스가 아니고, 사각형이 아니면 무시
-            if not cv.isContourConvex(approx):
-                continue
-            if len(approx) != 4:
-                continue
+            # if not cv.isContourConvex(approx):
+            #     continue
+            # if len(approx) != 4:
+            #     continue
 
             x, y, w, h = cv.boundingRect(pts)
             if h / w > 0.5:
                 continue
             area = cv.contourArea(pts)
-            if area < 2000:
+            if area < 80 * 80:
                 continue
 
             # cv.polylines(param.src, [approx], True, (0, 0, 255), 2, cv.LINE_AA)
@@ -94,7 +94,7 @@ class CutVehicleRegion(AbstractHandler):
         if min_pts is not None:
             x, y, w, h = cv.boundingRect(min_pts)
             param.dst = param.src[y:y + h, x + 20:x + w - 20]
-            # cv.rectangle(param.src, (x, y), (x + w, y + h), (0, 0, 255), thickness=3)
+            cv.rectangle(param.src, (x, y), (x + w, y + h), (0, 0, 255), thickness=3)
 
         return super().handle(param)
 
@@ -173,7 +173,7 @@ class GetVehicleNo(AbstractHandler):
 
         src_bin = cv.copyMakeBorder(src_bin, 10, 10, 10, 10, cv.BORDER_CONSTANT, value=(0, 0, 0))
         vehicle_no = self.get_text_from_image(src_bin)
-        if vehicle_no is not '':
+        if vehicle_no != '':
             m = p.match(vehicle_no)
             if m is not None:
                 param.vehicle_no = m.group()
@@ -203,7 +203,7 @@ class GetVehicleNo(AbstractHandler):
             if make_border:
                 src_bin = cv.copyMakeBorder(src_bin, 10, 10, 10, 10, cv.BORDER_CONSTANT, value=(0, 0, 0))
             vehicle_no = self.get_text_from_image(src_bin)
-            if vehicle_no is not '':
+            if vehicle_no != '':
                 m = p.match(vehicle_no)
                 if m is not None:
                     return m.group()
@@ -227,7 +227,7 @@ class GetVehicleNo(AbstractHandler):
 
 
 if __name__ == "__main__":
-    src = cv.imread('../imgs/vehicle18.jpeg')
+    src = cv.imread('../imgs/vehicle.jpeg')
     if src is None:
         print('image read fail!!')
         sys.exit()
