@@ -19,8 +19,13 @@ def find_digit(img, img_digits):
     max_idx = -1
     max_ccoeff = -1
 
+    img = cv.resize(img, (100, 150))
     for i in range(10):
-        img = cv.resize(img, (100, 150))
+        res = cv.matchTemplate(img, img_digits[i], cv.TM_CCOEFF_NORMED)
+        if res[0, 0] > max_ccoeff:
+            max_idx = i
+            max_ccoeff = res[0, 0]
+    return max_idx
 
 
 def main():
@@ -43,8 +48,11 @@ def main():
         (x, y, w, h, s) = stats[i]
         if s < 1000:
             continue
+        digit = find_digit(src_gray[y:y + h, x:x + w], img_digits)
+        cv.rectangle(dst, (x, y, w, h), (0, 255, 255))
+        cv.putText(dst, str(digit), (x, y - 4), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2, cv.LINE_AA)
 
-    cv.imshow('src', src)
+    cv.imshow('dst', dst)
 
     cv.waitKey()
     cv.destroyAllWindows()
