@@ -10,6 +10,7 @@ import sys
 
 import numpy as np
 import pytesseract
+import requests
 
 
 @dataclass
@@ -62,9 +63,13 @@ class CutVehicleRegion(AbstractHandler):
     def handle(self, param: ChainParam):
         self.src = param.src
         self.pre = param.pre
+        if param.dst is not None:
+            self.src = param.dst
+            gray = cv.cvtColor(param.dst, cv.COLOR_BGR2GRAY)
+            self.pre = cv.adaptiveThreshold(gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 4)
         min_pts = None
         min_area: int = sys.maxsize
-        contours, _ = cv.findContours(param.pre, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
+        contours, _ = cv.findContours(self.pre, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
         for pts in contours:
             # 외곽선 근사화
             approx = cv.approxPolyDP(pts, cv.arcLength(pts, True) * 0.02, True)
@@ -76,12 +81,14 @@ class CutVehicleRegion(AbstractHandler):
             #     continue
 
             x, y, w, h = cv.boundingRect(pts)
+
             if h / w > 0.5:
                 continue
             area = cv.contourArea(pts)
             if area < 80 * 80:
                 continue
-
+            cv.drawContours(param.src, [approx], 0, (0, 0, 255), 3)
+            # cv.rectangle(param.src, (x, y), (x + w, y + h), (0, 0, 255), thickness=3)
             # cv.polylines(param.src, [approx], True, (0, 0, 255), 2, cv.LINE_AA)
             count = self.get_connected_components((x, y, w, h))
             if count < 4 or count > 20:
@@ -227,7 +234,13 @@ class GetVehicleNo(AbstractHandler):
 
 
 if __name__ == "__main__":
-    src = cv.imread('../imgs/vehicle.jpeg')
+    # url = 'https://parkingcone.s3.ap-northeast-2.amazonaws.com/real/user_vehicle/2023/04/eaee1dfc75754d44046cfb9177c59c8b/1682679738_FVBUUC/f9c2755a3aa4cc06404b8e64f030c'
+    # url = 'https://parkingcone.s3.ap-northeast-2.amazonaws.com/real/user_vehicle/2023/05/eaee1dfc75754d44046cfb9177c59c8b/1682679738_FVBUUC/7cccd183e821468e65b81b734'
+    # url = 'https://parkingcone.s3.ap-northeast-2.amazonaws.com/real/user_vehicle/2023/04/eaee1dfc75754d44046cfb9177c59c8b/1682679738_FVBUUC/2cbdb867245618e515a61776b26dcd'
+    url = 'https://parkingcone.s3.ap-northeast-2.amazonaws.com/real/user_vehicle/2023/05/bc8e73ed52dc49fe9bf95149b00a9f31/1683169300_DGSPYV/66d64a516a3950a1686ce524453b9d81'
+    image_array = np.asarray(bytearray(requests.get(url).content), dtype=np.uint8)
+    src = cv.imdecode(image_array, cv.IMREAD_COLOR)
+    # src = cv.imread('../imgs/vehicle.jpeg')
     if src is None:
         print('image read fail!!')
         sys.exit()
@@ -236,7 +249,7 @@ if __name__ == "__main__":
     # chainParam.src = src
 
     pre = PreProcess()
-    pre.set_next(CutVehicleRegion()).set_next(GetVehicleNo())
+    pre.set_next(CutVehicleRegion()).set_next(CutVehicleRegion()).set_next(GetVehicleNo())
     pre.handle(chainParam)
 
     cv.imshow('pre', chainParam.pre)
