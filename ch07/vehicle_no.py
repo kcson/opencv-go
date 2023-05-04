@@ -63,10 +63,6 @@ class CutVehicleRegion(AbstractHandler):
     def handle(self, param: ChainParam):
         self.src = param.src
         self.pre = param.pre
-        if param.dst is not None:
-            self.src = param.dst
-            gray = cv.cvtColor(param.dst, cv.COLOR_BGR2GRAY)
-            self.pre = cv.adaptiveThreshold(gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 4)
         min_pts = None
         min_area: int = sys.maxsize
         contours, _ = cv.findContours(self.pre, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
@@ -87,7 +83,7 @@ class CutVehicleRegion(AbstractHandler):
             area = cv.contourArea(pts)
             if area < 80 * 80:
                 continue
-            cv.drawContours(param.src, [approx], 0, (0, 0, 255), 3)
+            # cv.drawContours(param.src, [approx], 0, (0, 0, 255), 3)
             # cv.rectangle(param.src, (x, y), (x + w, y + h), (0, 0, 255), thickness=3)
             # cv.polylines(param.src, [approx], True, (0, 0, 255), 2, cv.LINE_AA)
             count = self.get_connected_components((x, y, w, h))
@@ -249,7 +245,7 @@ if __name__ == "__main__":
     # chainParam.src = src
 
     pre = PreProcess()
-    pre.set_next(CutVehicleRegion()).set_next(CutVehicleRegion()).set_next(GetVehicleNo())
+    pre.set_next(CutVehicleRegion()).set_next(GetVehicleNo())
     pre.handle(chainParam)
 
     cv.imshow('pre', chainParam.pre)
