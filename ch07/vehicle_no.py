@@ -16,6 +16,7 @@ import requests
 @dataclass
 class ChainParam:
     src: np
+    copySrc: np = None
     pre: np = None
     dst: np = None
     vehicle_no: str = ''
@@ -57,15 +58,13 @@ class PreProcess(AbstractHandler):
 
 
 class CutVehicleRegion(AbstractHandler):
-    src = None
-    pre = None
+    # src = None
+    # pre = None
 
     def handle(self, param: ChainParam):
-        self.src = param.src
-        self.pre = param.pre
         min_pts = None
         min_area: int = sys.maxsize
-        contours, _ = cv.findContours(self.pre, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
+        contours, _ = cv.findContours(param.pre, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
         for pts in contours:
             # 외곽선 근사화
             approx = cv.approxPolyDP(pts, cv.arcLength(pts, True) * 0.02, True)
@@ -77,16 +76,16 @@ class CutVehicleRegion(AbstractHandler):
             #     continue
 
             x, y, w, h = cv.boundingRect(pts)
-
+            cv.rectangle(param.copySrc, (x, y), (x + w, y + h), (0, 0, 255), thickness=3)
             if h / w > 0.5:
                 continue
             area = cv.contourArea(pts)
             if area < 80 * 80:
                 continue
             # cv.drawContours(param.src, [approx], 0, (0, 0, 255), 3)
-            # cv.rectangle(param.src, (x, y), (x + w, y + h), (0, 0, 255), thickness=3)
+            # cv.rectangle(param.copySrc, (x, y), (x + w, y + h), (0, 0, 255), thickness=3)
             # cv.polylines(param.src, [approx], True, (0, 0, 255), 2, cv.LINE_AA)
-            count = self.get_connected_components((x, y, w, h))
+            count = self.get_connected_components((x, y, w, h), param)
             if count < 4 or count > 20:
                 continue
 
@@ -97,14 +96,16 @@ class CutVehicleRegion(AbstractHandler):
         if min_pts is not None:
             x, y, w, h = cv.boundingRect(min_pts)
             param.dst = param.src[y:y + h, x + 20:x + w - 20]
-            cv.rectangle(param.src, (x, y), (x + w, y + h), (0, 0, 255), thickness=3)
+            param.src = param.src[y:y + h, x + 20:x + w - 20]
+            param.copySrc = param.src.copy()
+            cv.rectangle(param.copySrc, (x, y), (x + w, y + h), (0, 0, 255), thickness=3)
 
         return super().handle(param)
 
-    def get_connected_components(self, rect) -> int:
+    def get_connected_components(self, rect, param: ChainParam) -> int:
         component_count = 0
         x, y, w, h = rect
-        mat = self.pre[y:y + h, x:x + w]
+        mat = param.pre[y:y + h, x:x + w]
         contours, _ = cv.findContours(mat, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
         if len(contours) == 0:
             return 0
@@ -183,7 +184,7 @@ class GetVehicleNo(AbstractHandler):
                 return super().handle(param)
 
         cv.imshow('src_bin', src_bin)
-        cv.waitKey()
+        # cv.waitKey()
         vehicle_no = self.retry_vehicle_no(gray, thres, p)
         param.vehicle_no = vehicle_no
         print(vehicle_no)
@@ -236,22 +237,22 @@ if __name__ == "__main__":
     url = 'https://parkingcone.s3.ap-northeast-2.amazonaws.com/real/user_vehicle/2023/05/bc8e73ed52dc49fe9bf95149b00a9f31/1683169300_DGSPYV/66d64a516a3950a1686ce524453b9d81'
     image_array = np.asarray(bytearray(requests.get(url).content), dtype=np.uint8)
     src = cv.imdecode(image_array, cv.IMREAD_COLOR)
-    # src = cv.imread('../imgs/vehicle.jpeg')
+    # src = cv.imread('../imgs/vehicle18.jpeg')
     if src is None:
         print('image read fail!!')
         sys.exit()
 
     chainParam = ChainParam(src)
-    # chainParam.src = src
+    chainParam.copySrc = src.copy()
 
     pre = PreProcess()
-    pre.set_next(CutVehicleRegion()).set_next(GetVehicleNo())
+    pre.set_next(CutVehicleRegion()).set_next(PreProcess()).set_next(CutVehicleRegion()).set_next(GetVehicleNo())
     pre.handle(chainParam)
 
     cv.imshow('pre', chainParam.pre)
     if chainParam.dst is not None:
         cv.imshow('dst', chainParam.dst)
-    cv.imshow('src', src)
+    cv.imshow('src', chainParam.copySrc)
     print(chainParam.vehicle_no)
 
     cv.waitKey()
