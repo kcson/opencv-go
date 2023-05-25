@@ -224,6 +224,7 @@ class GetVehicleNo(AbstractHandler):
         vehicle_no = pytesseract.image_to_string(src_bin, lang='kor', config='--oem 3 --psm 7')
         for i in range(len(vehicle_no)):
             v = vehicle_no[i]
+            print(v)
             if ('가' <= v <= '힣') or v.isdigit():
                 result = result + v
 
