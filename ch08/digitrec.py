@@ -30,6 +30,7 @@ def find_digit(img, img_digits):
 
 def main():
     src = cv.imread("../imgs/digits_print.bmp")
+    # src = cv.imread("../imgs/vehicle.jpeg")
     if src is None:
         print("image load fail!!")
         sys.exit()
@@ -42,6 +43,7 @@ def main():
     src_gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY)
     ret, src_bin = cv.threshold(src_gray, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU)
     cnt, _, stats, _ = cv.connectedComponentsWithStats(src_bin)
+    cv.imshow('src_bin', src_bin)
 
     dst = src.copy()
     for i in range(1, cnt):
