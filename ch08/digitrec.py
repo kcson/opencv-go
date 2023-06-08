@@ -22,6 +22,7 @@ def find_digit(img, img_digits):
     img = cv.resize(img, (100, 150))
     for i in range(10):
         res = cv.matchTemplate(img, img_digits[i], cv.TM_CCOEFF_NORMED)
+        print(i, res)
         if res[0, 0] > max_ccoeff:
             max_idx = i
             max_ccoeff = res[0, 0]
@@ -46,7 +47,7 @@ def main():
     cv.imshow('src_bin', src_bin)
 
     dst = src.copy()
-    for i in range(1, cnt):
+    for i in range(1, cnt):  # 0은 배경
         (x, y, w, h, s) = stats[i]
         if s < 1000:
             continue
