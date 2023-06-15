@@ -21,6 +21,8 @@ if src is None:
     sys.exit()
 
 height, width, channels = src.shape
+origin = src.copy()
+src = cv.resize(src,  None, fx=416/width, fy=416/height)
 blob = cv.dnn.blobFromImage(src, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
 net.setInput(blob)
 
@@ -62,10 +64,10 @@ for i in range(len(boxes)):
         # cv.rectangle(src, (x, y, w, h), (0, 0, 255), thickness=3)
 
 x, y, w, h = max_box
-cv.rectangle(src, (x, y, w, h), (0, 0, 255), thickness=3)
+cv.rectangle(origin, (x, y, w, h), (0, 0, 255), thickness=3)
 tm.stop()
 print(tm.getTimeMilli())
 
-cv.imshow('src', src)
+cv.imshow('src', origin)
 cv.waitKey()
 cv.destroyAllWindows()
