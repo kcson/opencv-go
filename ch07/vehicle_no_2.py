@@ -70,7 +70,11 @@ class DetectYolo(AbstractHandler):
             return super().handle(param)
         param.src = param.copySrc.copy()
 
+        tm = cv.TickMeter()
+        tm.start()
         net = cv.dnn.readNetFromDarknet('../klpr/yolov4-ANPR.cfg', '../klpr/yolov4-ANPR.weights')
+        tm.stop()
+        print('DetectYolo readNetFromDarknet : ', tm.getTimeSec())
         with open('../klpr/obj.names', 'r') as f:
             classes = [line.strip() for line in f.readlines()]
 
@@ -82,10 +86,18 @@ class DetectYolo(AbstractHandler):
         blob = cv.dnn.blobFromImage(param.src, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
         net.setInput(blob)
 
+        tm = cv.TickMeter()
+        tm.start()
         outs = net.forward(output_layers)
+        tm.stop()
+        print('DetectYolo forward : ', tm.getTimeSec())
+
         class_ids = []
         confidences = []
         boxes = []
+
+        tm = cv.TickMeter()
+        tm.start()
         for out in outs:
             for detection in out:
                 scores = detection[5:]
@@ -107,8 +119,10 @@ class DetectYolo(AbstractHandler):
                     class_ids.append(class_id)
 
         indexes = cv.dnn.NMSBoxes(boxes, confidences, 0.75, 0.4)
+
         max_box_area = 0
         max_box = None
+        # tm.start()
         for i in range(len(boxes)):
             if i in indexes:
                 class_name = classes[class_ids[i]]
@@ -124,6 +138,8 @@ class DetectYolo(AbstractHandler):
             my = 10 if my < 0 else my
             param.detectedLP = (mx, my, mw, mh)
             param.dst = param.copySrc[my:my + mh, mx:mx + mw]
+        tm.stop()
+        print('DetectYolo detection : ', tm.getTimeSec())
 
         return super().handle(param)
 
@@ -280,8 +296,14 @@ class RecognitionEasy(AbstractHandler):
         if param.dst is None:
             return super().handle(param)
 
+        tm = cv.TickMeter()
+        tm.start()
         reader = easyocr.Reader(['ko', 'en'])
+        tm.stop()
+        print('RecognitionEasy Reader', tm.getTimeSec())
 
+        tm = cv.TickMeter()
+        tm.start()
         src_bin = cv.cvtColor(param.dst, cv.COLOR_BGR2GRAY)
         src_bin = cv.GaussianBlur(src_bin, (0, 0), 1, sigmaY=4, borderType=cv.BORDER_DEFAULT)
         thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU, dst=src_bin)
@@ -302,7 +324,8 @@ class RecognitionEasy(AbstractHandler):
                 result_vehicle_no = result_vehicle_no + v
 
         param.vehicle_no = result_vehicle_no
-
+        tm.stop()
+        print('RecognitionEasy Recognition', tm.getTimeSec())
         return super().handle(param)
 
 
@@ -381,7 +404,7 @@ if __name__ == "__main__":
     # url = 'https://parkingcone.s3.ap-northeast-2.amazonaws.com/real/user_vehicle/2023/05/bc8e73ed52dc49fe9bf95149b00a9f31/1683169300_DGSPYV/66d64a516a3950a1686ce524453b9d81'
     # image_array = np.asarray(bytearray(requests.get(url).content), dtype=np.uint8)
     # src = cv.imdecode(image_array, cv.IMREAD_COLOR)
-    src = cv.imread('../imgs/vehicle20.jpeg')
+    src = cv.imread('../imgs/vehicle.jpeg')
     if src is None:
         print('image read fail!!')
         sys.exit()
