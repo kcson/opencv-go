@@ -6,3 +6,5 @@
 /.idea/other.xml
 /.idea/dynamoDBSettings.xml
 /vehicleNo.jpg
+/klpr/frozen_east_text_detection.pb
+/klpr/yolov4-ANPR.weights
