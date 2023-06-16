@@ -8,10 +8,11 @@ from dataclasses import dataclass
 import cv2 as cv
 import sys
 
+import easyocr
 import numpy as np
 import pytesseract
 from PIL import ImageFont, ImageDraw, Image
-import requests
+import imutils
 
 
 @dataclass
@@ -63,8 +64,12 @@ class PreProcess(AbstractHandler):
         return super().handle(param)
 
 
-class DetectLP(AbstractHandler):
+class DetectYolo(AbstractHandler):
     def handle(self, param: ChainParam):
+        if param.dst is not None:
+            return super().handle(param)
+        param.src = param.copySrc.copy()
+
         net = cv.dnn.readNetFromDarknet('../klpr/yolov4-ANPR.cfg', '../klpr/yolov4-ANPR.weights')
         with open('../klpr/obj.names', 'r') as f:
             classes = [line.strip() for line in f.readlines()]
@@ -73,6 +78,7 @@ class DetectLP(AbstractHandler):
         output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 
         height, width, channels = param.src.shape
+        param.src = cv.resize(param.src, None, fx=416 / width, fy=416 / height)
         blob = cv.dnn.blobFromImage(param.src, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
         net.setInput(blob)
 
@@ -100,33 +106,73 @@ class DetectLP(AbstractHandler):
                     confidences.append(float(confidence))
                     class_ids.append(class_id)
 
-        indexes = cv.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
+        indexes = cv.dnn.NMSBoxes(boxes, confidences, 0.75, 0.4)
         max_box_area = 0
-        max_box = (0, 0, 0, 0)
+        max_box = None
         for i in range(len(boxes)):
             if i in indexes:
                 class_name = classes[class_ids[i]]
-                if class_name == 'car' and len(indexes) > 1:
+                if class_name == 'car':  # and len(indexes) > 1:
                     continue
                 x, y, w, h = boxes[i]
                 if w * h > max_box_area:
                     max_box = boxes[i]
 
-        x, y, w, h = max_box
-        x = 10 if x < 0 else x
-        y = 10 if y < 0 else y
-        param.detectedLP = (x, y, w, h)
-        param.dst = param.src[y:y + h, x:x + w]
-        cv.rectangle(param.copySrc, (x+20, y+15, w-30, h-20), (0, 0, 255), thickness=2)
+        if max_box is not None:
+            mx, my, mw, mh = max_box
+            mx = 10 if mx < 0 else mx
+            my = 10 if my < 0 else my
+            param.detectedLP = (mx, my, mw, mh)
+            param.dst = param.copySrc[my:my + mh, mx:mx + mw]
 
         return super().handle(param)
 
 
-class CutVehicleRegion(AbstractHandler):
-    # src = None
-    # pre = None
-
+class DetectMy(AbstractHandler):
     def handle(self, param: ChainParam):
+        if param.dst is not None:
+            return super().handle(param)
+        param.src = param.copySrc.copy()
+
+        gray = cv.cvtColor(param.src, cv.COLOR_BGR2GRAY)
+        bfilter = cv.bilateralFilter(gray, 11, 11, 17)
+        edged = cv.Canny(bfilter, 0, 80)
+        edged = cv.dilate(edged, None, iterations=1)
+
+        cv.imshow('edged', edged)
+
+        contours, _ = cv.findContours(edged.copy(), cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+        # contours = imutils.grab_contours(contours)
+        contours = sorted(contours, key=cv.contourArea, reverse=True)
+
+        location = None
+        for contour in contours:
+            cv.rectangle(param.copySrc, cv.boundingRect(contour), (0, 0, 255), thickness=3)
+            approx = cv.approxPolyDP(contour, 10, True)
+            if len(approx) == 4:
+                location = cv.boundingRect(contour)
+                break
+
+        if location is not None:
+            (x, y, w, h) = location
+            param.detectedLP = location
+            param.dst = param.copySrc[y:y + h, x:x + w]
+            # cv.rectangle(param.copySrc, (x, y, w, h), (0, 0, 255), thickness=1)
+
+        return super().handle(param)
+
+
+class DetectCustom(AbstractHandler):
+    def handle(self, param: ChainParam):
+        if param.dst is not None:
+            return super().handle(param)
+        param.src = param.copySrc.copy()
+
+        gray = cv.cvtColor(param.src, cv.COLOR_BGR2GRAY)
+        src_bin = cv.GaussianBlur(gray, (0, 0), 2, sigmaY=0, borderType=cv.BORDER_DEFAULT)
+        src_bin = cv.adaptiveThreshold(src_bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 4)
+        param.pre = cv.dilate(src_bin, None, iterations=1)
+
         min_pts = None
         min_area: int = sys.maxsize
         contours, _ = cv.findContours(param.pre, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
@@ -163,9 +209,8 @@ class CutVehicleRegion(AbstractHandler):
 
         if min_pts is not None:
             x, y, w, h = cv.boundingRect(min_pts)
-            param.dst = param.src[y:y + h, x + 20:x + w - 20]
-            param.src = param.src[y:y + h, x + 20:x + w - 20]
-            cv.rectangle(param.copySrc, (x, y), (x + w, y + h), (0, 0, 255), thickness=3)
+            param.detectedLP = (x, y, w, h)
+            param.dst = param.copySrc[y:y + h, x + 20:x + w - 20]
 
         return super().handle(param)
 
@@ -230,7 +275,38 @@ class CutVehicleRegion(AbstractHandler):
         return similar_count
 
 
-class GetVehicleNo(AbstractHandler):
+class RecognitionEasy(AbstractHandler):
+    def handle(self, param: ChainParam):
+        if param.dst is None:
+            return super().handle(param)
+
+        reader = easyocr.Reader(['ko', 'en'])
+
+        src_bin = cv.cvtColor(param.dst, cv.COLOR_BGR2GRAY)
+        src_bin = cv.GaussianBlur(src_bin, (0, 0), 1, sigmaY=4, borderType=cv.BORDER_DEFAULT)
+        thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU, dst=src_bin)
+
+        src_bin = cv.erode(src_bin, None, iterations=2)
+
+        src_bin = cv.copyMakeBorder(src_bin, 10, 10, 10, 10, cv.BORDER_CONSTANT, value=(0, 0, 0))
+        result = reader.readtext(src_bin, detail=0, paragraph=True)
+        vehicle_no = ''
+        if len(result) > 0:
+            vehicle_no = result[0]
+
+        result_vehicle_no = ''
+        for i in range(len(vehicle_no)):
+            v = vehicle_no[i]
+            print(v)
+            if ('가' <= v <= '힣') or v.isdigit():
+                result_vehicle_no = result_vehicle_no + v
+
+        param.vehicle_no = result_vehicle_no
+
+        return super().handle(param)
+
+
+class RecognitionTesseract(AbstractHandler):
     def handle(self, param: ChainParam):
         if param.dst is None:
             return super().handle(param)
@@ -305,7 +381,7 @@ if __name__ == "__main__":
     # url = 'https://parkingcone.s3.ap-northeast-2.amazonaws.com/real/user_vehicle/2023/05/bc8e73ed52dc49fe9bf95149b00a9f31/1683169300_DGSPYV/66d64a516a3950a1686ce524453b9d81'
     # image_array = np.asarray(bytearray(requests.get(url).content), dtype=np.uint8)
     # src = cv.imdecode(image_array, cv.IMREAD_COLOR)
-    src = cv.imread('../imgs/vehicle19.jpeg')
+    src = cv.imread('../imgs/vehicle20.jpeg')
     if src is None:
         print('image read fail!!')
         sys.exit()
@@ -313,17 +389,19 @@ if __name__ == "__main__":
     chainParam = ChainParam(src)
     chainParam.copySrc = src.copy()
 
-    # pre = PreProcess()
-    # pre.set_next(CutVehicleRegion()).set_next(GetVehicleNo())  # .set_next(PreProcess()).set_next(CutVehicleRegion()) # .set_next(GetVehicleNo())
-    pre = DetectLP()
-    pre.set_next(GetVehicleNo())
+    pre = DetectYolo()
+    pre.set_next(DetectCustom()).set_next(RecognitionEasy())
+    # pre.set_next(RecognitionTesseract())
     pre.handle(chainParam)
 
     # cv.imshow('pre', chainParam.pre)
+    # if chainParam.dst is not None:
+    #     cv.imshow('dst', chainParam.dst)
+    #     cv.imshow('resize', cv.resize(chainParam.dst, (94, 24)))
+
     if chainParam.dst is not None:
-        cv.imshow('dst', chainParam.dst)
-        cv.imshow('resize', cv.resize(chainParam.dst, (94, 24)))
-    if chainParam.vehicle_no is not None:
+        cv.rectangle(chainParam.copySrc, chainParam.detectedLP, (0, 0, 255), thickness=3)
+    if chainParam.vehicle_no != '':
         x, y, w, h = chainParam.detectedLP
 
         chainParam.copySrc = Image.fromarray(chainParam.copySrc)
@@ -331,7 +409,6 @@ if __name__ == "__main__":
         font = ImageFont.truetype("AppleGothic.ttf", 80)
         draw.text((x, y - 96), chainParam.vehicle_no, font=font, fill=(0, 255, 255))
         chainParam.copySrc = np.array(chainParam.copySrc)
-        # cv.putText(chainParam.copySrc, chainParam.vehicle_no, (x, y - 8), cv.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 255), 3, cv.LINE_AA)
         print(chainParam.vehicle_no)
 
     cv.imshow('src', chainParam.copySrc)
