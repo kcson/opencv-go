@@ -215,7 +215,7 @@ class DetectCustom(AbstractHandler):
             # cv.polylines(param.src, [approx], True, (0, 0, 255), 2, cv.LINE_AA)
             count = self.get_connected_components((x, y, w, h), param)
             print('count : ', count)
-            if count < 5 or count > 12:
+            if count < 5 or count > 15:
                 continue
             #  cv.rectangle(param.copySrc, (x, y), (x + w, y + h), (0, 0, 255), thickness=1)
 
@@ -298,23 +298,32 @@ class RecognitionEasy(AbstractHandler):
 
         tm = cv.TickMeter()
         tm.start()
-        reader = easyocr.Reader(['ko', 'en'])
+        reader = easyocr.Reader(['ko'])
         tm.stop()
         print('RecognitionEasy Reader', tm.getTimeSec())
 
         tm = cv.TickMeter()
         tm.start()
+        height, width = param.dst.shape[:2]
+        ratio = width / height
+        new_width = 1024
+        new_height = int(new_width / ratio)
+        param.dst = cv.resize(param.dst, (new_width, new_height))
+
         src_bin = cv.cvtColor(param.dst, cv.COLOR_BGR2GRAY)
-        src_bin = cv.GaussianBlur(src_bin, (0, 0), 1, sigmaY=4, borderType=cv.BORDER_DEFAULT)
-        thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU, dst=src_bin)
+        src_bin = cv.GaussianBlur(src_bin, (0, 0), 1, sigmaY=0, borderType=cv.BORDER_DEFAULT)
+        # src_bin = cv.bilateralFilter(src_bin, 0, 10, 5)
+        thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU, dst=src_bin)
 
-        src_bin = cv.erode(src_bin, None, iterations=2)
+        # src_bin = cv.dilate(src_bin, None, iterations=1)
+        # src_bin = cv.erode(src_bin, None, iterations=1)
 
-        src_bin = cv.copyMakeBorder(src_bin, 10, 10, 10, 10, cv.BORDER_CONSTANT, value=(0, 0, 0))
+        # src_bin = cv.copyMakeBorder(src_bin, 10, 10, 10, 10, cv.BORDER_CONSTANT, value=(0, 0, 0))
+        cv.imshow('src_bin', src_bin)
         result = reader.readtext(src_bin, detail=0, paragraph=True)
         vehicle_no = ''
-        if len(result) > 0:
-            vehicle_no = result[0]
+        for v in result:
+            vehicle_no = vehicle_no + v
 
         result_vehicle_no = ''
         for i in range(len(vehicle_no)):
@@ -323,7 +332,11 @@ class RecognitionEasy(AbstractHandler):
             if ('가' <= v <= '힣') or v.isdigit():
                 result_vehicle_no = result_vehicle_no + v
 
-        param.vehicle_no = result_vehicle_no
+        p = re.compile('[0-9]{2,3}[가-힣]{1}[0-9]{4}|[가-힣]{2}[0-9]{2}[가-힣]{1}[0-9]{4}')
+        m = p.match(result_vehicle_no)
+        if m is not None:
+            param.vehicle_no = m.group()
+        # param.vehicle_no = result_vehicle_no
         tm.stop()
         print('RecognitionEasy Recognition', tm.getTimeSec())
         return super().handle(param)
@@ -336,12 +349,12 @@ class RecognitionTesseract(AbstractHandler):
 
         p = re.compile('[0-9]{2,3}[가-힣]{1}[0-9]{4}|[가-힣]{2}[0-9]{2}[가-힣]{1}[0-9]{4}')
         gray = cv.cvtColor(param.dst, cv.COLOR_BGR2GRAY)
-        src_bin = cv.GaussianBlur(gray, (0, 0), 1, sigmaY=4, borderType=cv.BORDER_DEFAULT)
-        thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU, dst=src_bin)
+        src_bin = cv.GaussianBlur(gray, (0, 0), 1, sigmaY=0, borderType=cv.BORDER_DEFAULT)
+        thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU, dst=src_bin)
 
-        src_bin = cv.erode(src_bin, None, iterations=2)
+        src_bin = cv.erode(src_bin, None, iterations=1)
 
-        src_bin = cv.copyMakeBorder(src_bin, 10, 10, 10, 10, cv.BORDER_CONSTANT, value=(0, 0, 0))
+        # src_bin = cv.copyMakeBorder(src_bin, 10, 10, 10, 10, cv.BORDER_CONSTANT, value=(0, 0, 0))
         vehicle_no = self.get_text_from_image(src_bin)
         if vehicle_no != '':
             m = p.match(vehicle_no)
@@ -387,7 +400,7 @@ class RecognitionTesseract(AbstractHandler):
     @staticmethod
     def get_text_from_image(src_bin) -> str:
         result: str = ''
-        vehicle_no = pytesseract.image_to_string(src_bin, lang='kor', config='--oem 3 --psm 7')
+        vehicle_no = pytesseract.image_to_string(src_bin, lang='kor', config='--oem 3 --psm 11')
         for i in range(len(vehicle_no)):
             v = vehicle_no[i]
             print(v)
@@ -404,7 +417,7 @@ if __name__ == "__main__":
     # url = 'https://parkingcone.s3.ap-northeast-2.amazonaws.com/real/user_vehicle/2023/05/bc8e73ed52dc49fe9bf95149b00a9f31/1683169300_DGSPYV/66d64a516a3950a1686ce524453b9d81'
     # image_array = np.asarray(bytearray(requests.get(url).content), dtype=np.uint8)
     # src = cv.imdecode(image_array, cv.IMREAD_COLOR)
-    src = cv.imread('../imgs/vehicle.jpeg')
+    src = cv.imread('../imgs/vehicle18.jpeg')
     if src is None:
         print('image read fail!!')
         sys.exit()
@@ -418,8 +431,8 @@ if __name__ == "__main__":
     pre.handle(chainParam)
 
     # cv.imshow('pre', chainParam.pre)
-    # if chainParam.dst is not None:
-    #     cv.imshow('dst', chainParam.dst)
+    if chainParam.dst is not None:
+        cv.imshow('dst', chainParam.dst)
     #     cv.imshow('resize', cv.resize(chainParam.dst, (94, 24)))
 
     if chainParam.dst is not None:
@@ -429,8 +442,8 @@ if __name__ == "__main__":
 
         chainParam.copySrc = Image.fromarray(chainParam.copySrc)
         draw = ImageDraw.Draw(chainParam.copySrc)
-        font = ImageFont.truetype("AppleGothic.ttf", 80)
-        draw.text((x, y - 96), chainParam.vehicle_no, font=font, fill=(0, 255, 255))
+        font = ImageFont.truetype("AppleGothic.ttf", 50)
+        draw.text((x, y - 50), chainParam.vehicle_no, font=font, fill=(0, 255, 255))
         chainParam.copySrc = np.array(chainParam.copySrc)
         print(chainParam.vehicle_no)
 

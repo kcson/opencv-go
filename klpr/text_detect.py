@@ -7,7 +7,7 @@ from imutils.object_detection import non_max_suppression
 
 tm = cv.TickMeter()
 tm.start()
-src = cv.imread('../imgs/vehicle10.jpeg')
+src = cv.imread('../imgs/vehicle4.jpeg')
 if src is None:
     print('image load fail!!')
     sys.exit()
