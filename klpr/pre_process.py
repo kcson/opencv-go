@@ -2,7 +2,7 @@ import os
 import unicodedata
 import cv2 as cv
 
-from ch07.vehicle_no_2 import ChainParam, DetectCustom
+from ch07.vehicle_no_2 import ChainParam, DetectCustom, DetectYolo
 
 root = '/Users/kcson/mywork/data/[원천]자동차번호판OCR데이터'
 
@@ -30,6 +30,7 @@ for file_name in train_file_list:
     chainParam.copySrc = src.copy()
 
     detect = DetectCustom()
+    # detect = DetectYolo()
     detect.handle(chainParam)
     if chainParam.dst is not None:
         cv.imshow('dst', chainParam.dst)
