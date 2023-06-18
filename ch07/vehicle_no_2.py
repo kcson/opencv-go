@@ -12,6 +12,7 @@ import easyocr
 import numpy as np
 import pytesseract
 from PIL import ImageFont, ImageDraw, Image
+from paddleocr import PaddleOCR
 import imutils
 
 
@@ -291,6 +292,58 @@ class DetectCustom(AbstractHandler):
         return similar_count
 
 
+class RecognitionPaddle(AbstractHandler):
+    def handle(self, param: ChainParam):
+        if param.dst is None:
+            return super().handle(param)
+
+        tm = cv.TickMeter()
+        tm.start()
+        ocr = PaddleOCR(use_angle_cls=False, lang='korean', rec_algorithm='CRNN')
+        tm.stop()
+        print('RecognitionPaddle Load', tm.getTimeSec())
+
+        tm = cv.TickMeter()
+        tm.start()
+        height, width = param.dst.shape[:2]
+        ratio = width / height
+        new_width = 1024
+        new_height = int(new_width / ratio)
+        param.dst = cv.resize(param.dst, (new_width, new_height))
+
+        src_bin = cv.cvtColor(param.dst, cv.COLOR_BGR2GRAY)
+        src_bin = cv.GaussianBlur(src_bin, (0, 0), 1, sigmaY=0, borderType=cv.BORDER_DEFAULT)
+        # src_bin = cv.bilateralFilter(src_bin, 0, 10, 5)
+        thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU, dst=src_bin)
+
+        # src_bin = cv.dilate(src_bin, None, iterations=1)
+        # src_bin = cv.erode(src_bin, None, iterations=1)
+
+        # src_bin = cv.copyMakeBorder(src_bin, 10, 10, 10, 10, cv.BORDER_CONSTANT, value=(0, 0, 0))
+        cv.imshow('src_bin', src_bin)
+        results = ocr.ocr(src_bin, det=False, rec=True, cls=False)
+        vehicle_no = ''
+        for result in results:
+            text, confidence = result[0]
+            vehicle_no = vehicle_no + text
+
+        result_vehicle_no = ''
+        for i in range(len(vehicle_no)):
+            v = vehicle_no[i]
+            print(v)
+            if ('가' <= v <= '힣') or v.isdigit():
+                result_vehicle_no = result_vehicle_no + v
+
+        p = re.compile('[0-9]{2,3}[가-힣]{1}[0-9]{4}|[가-힣]{2}[0-9]{2}[가-힣]{1}[0-9]{4}')
+        m = p.match(result_vehicle_no)
+        if m is not None:
+            param.vehicle_no = m.group()
+        # param.vehicle_no = result_vehicle_no
+        tm.stop()
+        print('RecognitionPaddle Recognition', tm.getTimeSec())
+        return super().handle(param)
+
+
 class RecognitionEasy(AbstractHandler):
     def handle(self, param: ChainParam):
         if param.dst is None:
@@ -347,31 +400,33 @@ class RecognitionTesseract(AbstractHandler):
         if param.dst is None:
             return super().handle(param)
 
+        tm = cv.TickMeter()
+        tm.start()
+
+        height, width = param.dst.shape[:2]
+        ratio = width / height
+        new_width = 1024
+        new_height = int(new_width / ratio)
+        param.dst = cv.resize(param.dst, (new_width, new_height))
+
         p = re.compile('[0-9]{2,3}[가-힣]{1}[0-9]{4}|[가-힣]{2}[0-9]{2}[가-힣]{1}[0-9]{4}')
         gray = cv.cvtColor(param.dst, cv.COLOR_BGR2GRAY)
         src_bin = cv.GaussianBlur(gray, (0, 0), 1, sigmaY=0, borderType=cv.BORDER_DEFAULT)
         thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU, dst=src_bin)
 
-        src_bin = cv.erode(src_bin, None, iterations=1)
+        src_bin = cv.dilate(src_bin, None, iterations=1)
+        # src_bin = cv.erode(src_bin, None, iterations=1)
 
         # src_bin = cv.copyMakeBorder(src_bin, 10, 10, 10, 10, cv.BORDER_CONSTANT, value=(0, 0, 0))
+        cv.imshow('src_bin', src_bin)
         vehicle_no = self.get_text_from_image(src_bin)
         if vehicle_no != '':
             m = p.match(vehicle_no)
             if m is not None:
                 param.vehicle_no = m.group()
-                return super().handle(param)
 
-        cv.imshow('src_bin', src_bin)
-        # cv.waitKey()
-        vehicle_no = self.retry_vehicle_no(gray, thres, p)
-        param.vehicle_no = vehicle_no
-        print(vehicle_no)
-        if vehicle_no == '' or len(vehicle_no) == 4:
-            v = self.retry_vehicle_no(gray, thres, p, make_border=True)
-            print(v)
-            if vehicle_no == '' or len(v) >= 4:
-                param.vehicle_no = v
+        tm.stop()
+        print('RecognitionTesseract Recognition', tm.getTimeSec())
 
         return super().handle(param)
 
@@ -400,7 +455,10 @@ class RecognitionTesseract(AbstractHandler):
     @staticmethod
     def get_text_from_image(src_bin) -> str:
         result: str = ''
-        vehicle_no = pytesseract.image_to_string(src_bin, lang='kor', config='--oem 3 --psm 11')
+        config = '--oem 3 --psm 7'
+        white_list = ' -c tessedit_char_whitelist={}'.format('1234567890가나다라마거너더러머버서어저고노도로모보소오조구누두루무부수우주아바사자하허호국합육해공')
+        config += white_list
+        vehicle_no = pytesseract.image_to_string(src_bin, lang='kor', config=config)
         for i in range(len(vehicle_no)):
             v = vehicle_no[i]
             print(v)
@@ -426,8 +484,9 @@ if __name__ == "__main__":
     chainParam.copySrc = src.copy()
 
     pre = DetectYolo()
+    # pre.set_next(DetectCustom()).set_next(RecognitionPaddle())
     pre.set_next(DetectCustom()).set_next(RecognitionEasy())
-    # pre.set_next(RecognitionTesseract())
+    # pre.set_next(DetectCustom()).set_next(RecognitionTesseract())
     pre.handle(chainParam)
 
     # cv.imshow('pre', chainParam.pre)
