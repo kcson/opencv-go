@@ -12,7 +12,6 @@ import easyocr
 import numpy as np
 import pytesseract
 from PIL import ImageFont, ImageDraw, Image
-from paddleocr import PaddleOCR
 import imutils
 
 
@@ -292,58 +291,6 @@ class DetectCustom(AbstractHandler):
         return similar_count
 
 
-class RecognitionPaddle(AbstractHandler):
-    def handle(self, param: ChainParam):
-        if param.dst is None:
-            return super().handle(param)
-
-        tm = cv.TickMeter()
-        tm.start()
-        ocr = PaddleOCR(use_angle_cls=False, lang='korean', rec_algorithm='CRNN')
-        tm.stop()
-        print('RecognitionPaddle Load', tm.getTimeSec())
-
-        tm = cv.TickMeter()
-        tm.start()
-        height, width = param.dst.shape[:2]
-        ratio = width / height
-        new_width = 1024
-        new_height = int(new_width / ratio)
-        param.dst = cv.resize(param.dst, (new_width, new_height))
-
-        src_bin = cv.cvtColor(param.dst, cv.COLOR_BGR2GRAY)
-        src_bin = cv.GaussianBlur(src_bin, (0, 0), 1, sigmaY=0, borderType=cv.BORDER_DEFAULT)
-        # src_bin = cv.bilateralFilter(src_bin, 0, 10, 5)
-        thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU, dst=src_bin)
-
-        # src_bin = cv.dilate(src_bin, None, iterations=1)
-        # src_bin = cv.erode(src_bin, None, iterations=1)
-
-        # src_bin = cv.copyMakeBorder(src_bin, 10, 10, 10, 10, cv.BORDER_CONSTANT, value=(0, 0, 0))
-        cv.imshow('src_bin', src_bin)
-        results = ocr.ocr(src_bin, det=False, rec=True, cls=False)
-        vehicle_no = ''
-        for result in results:
-            text, confidence = result[0]
-            vehicle_no = vehicle_no + text
-
-        result_vehicle_no = ''
-        for i in range(len(vehicle_no)):
-            v = vehicle_no[i]
-            print(v)
-            if ('가' <= v <= '힣') or v.isdigit():
-                result_vehicle_no = result_vehicle_no + v
-
-        p = re.compile('[0-9]{2,3}[가-힣]{1}[0-9]{4}|[가-힣]{2}[0-9]{2}[가-힣]{1}[0-9]{4}')
-        m = p.match(result_vehicle_no)
-        if m is not None:
-            param.vehicle_no = m.group()
-        # param.vehicle_no = result_vehicle_no
-        tm.stop()
-        print('RecognitionPaddle Recognition', tm.getTimeSec())
-        return super().handle(param)
-
-
 class RecognitionEasy(AbstractHandler):
     def handle(self, param: ChainParam):
         if param.dst is None:
@@ -475,7 +422,7 @@ if __name__ == "__main__":
     # url = 'https://parkingcone.s3.ap-northeast-2.amazonaws.com/real/user_vehicle/2023/05/bc8e73ed52dc49fe9bf95149b00a9f31/1683169300_DGSPYV/66d64a516a3950a1686ce524453b9d81'
     # image_array = np.asarray(bytearray(requests.get(url).content), dtype=np.uint8)
     # src = cv.imdecode(image_array, cv.IMREAD_COLOR)
-    src = cv.imread('../imgs/vehicle18.jpeg')
+    src = cv.imread('../imgs/vehicle21.jpeg')
     if src is None:
         print('image read fail!!')
         sys.exit()
@@ -484,7 +431,6 @@ if __name__ == "__main__":
     chainParam.copySrc = src.copy()
 
     pre = DetectYolo()
-    # pre.set_next(DetectCustom()).set_next(RecognitionPaddle())
     pre.set_next(DetectCustom()).set_next(RecognitionEasy())
     # pre.set_next(DetectCustom()).set_next(RecognitionTesseract())
     pre.handle(chainParam)
