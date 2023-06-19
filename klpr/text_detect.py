@@ -9,7 +9,7 @@ from ch07.vehicle_no_2 import ChainParam, DetectCustom
 
 tm = cv.TickMeter()
 tm.start()
-src = cv.imread('../imgs/vehicle20.jpeg')
+src = cv.imread('../imgs/vehicle21.jpeg')
 if src is None:
     print('image load fail!!')
     sys.exit()
@@ -25,11 +25,11 @@ if chainParam.dst is None:
     sys.exit()
 
 src = chainParam.dst.copy()
-# height, width = chainParam.dst.shape[:2]
-# ratio = width / height
-# new_width = 1024
-# new_height = int(new_width / ratio)
-# src = cv.resize(chainParam.dst, (new_width, new_height))
+height, width = chainParam.dst.shape[:2]
+ratio = width / height
+new_width = 1024
+new_height = int(new_width / ratio)
+src = cv.resize(chainParam.dst, (new_width, new_height))
 
 origin = src.copy()
 height, width, channels = src.shape
@@ -80,7 +80,7 @@ for y in range(0, numRows):
 
         # text prediction bounding box의 starting, ending (x,y) 좌표를 계산한다
         endX = int(offsetX + (cos * xData1[x]) + (sin * xData2[x]))
-        endY = int(offsetY + (sin * xData1[x]) + (cos * xData2[x]))
+        endY = int(offsetY - (sin * xData1[x]) + (cos * xData2[x]))
         startX = int(endX - w)
         startY = int(endY - h)
 

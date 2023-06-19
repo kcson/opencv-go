@@ -23,6 +23,7 @@ class ChainParam:
     dst: np = None
     vehicle_no: str = ''
     detectedLP = None
+    newWidth = 1024
 
 
 class Handler(ABC):
@@ -307,7 +308,7 @@ class RecognitionEasy(AbstractHandler):
         tm.start()
         height, width = param.dst.shape[:2]
         ratio = width / height
-        new_width = 1024
+        new_width = param.newWidth
         new_height = int(new_width / ratio)
         param.dst = cv.resize(param.dst, (new_width, new_height))
 
@@ -321,15 +322,17 @@ class RecognitionEasy(AbstractHandler):
 
         # src_bin = cv.copyMakeBorder(src_bin, 10, 10, 10, 10, cv.BORDER_CONSTANT, value=(0, 0, 0))
         cv.imshow('src_bin', src_bin)
-        result = reader.readtext(src_bin, detail=0, paragraph=True)
+        white_list = '1234567890가나다라마거너더러머버서어저고노도로모보소오조구누두루무부수우주아바사자하허호배국합육해공인천대'
+        result = reader.readtext(src_bin, detail=0, paragraph=True,allowlist=white_list, decoder='beamsearch')
         vehicle_no = ''
         for v in result:
+            print(v)
             vehicle_no = vehicle_no + v
 
         result_vehicle_no = ''
         for i in range(len(vehicle_no)):
             v = vehicle_no[i]
-            print(v)
+            # print(v)
             if ('가' <= v <= '힣') or v.isdigit():
                 result_vehicle_no = result_vehicle_no + v
 
@@ -423,7 +426,7 @@ if __name__ == "__main__":
     # url = 'https://parkingcone.s3.ap-northeast-2.amazonaws.com/real/user_vehicle/2023/05/bc8e73ed52dc49fe9bf95149b00a9f31/1683169300_DGSPYV/66d64a516a3950a1686ce524453b9d81'
     # image_array = np.asarray(bytearray(requests.get(url).content), dtype=np.uint8)
     # src = cv.imdecode(image_array, cv.IMREAD_COLOR)
-    src = cv.imread('../imgs/vehicle22.jpeg')
+    src = cv.imread('../imgs/vehicle.jpeg')
     if src is None:
         print('image read fail!!')
         sys.exit()
