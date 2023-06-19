@@ -5,12 +5,31 @@ import numpy as np
 
 from imutils.object_detection import non_max_suppression
 
+from ch07.vehicle_no_2 import ChainParam, DetectCustom
+
 tm = cv.TickMeter()
 tm.start()
-src = cv.imread('../imgs/vehicle4.jpeg')
+src = cv.imread('../imgs/vehicle20.jpeg')
 if src is None:
     print('image load fail!!')
     sys.exit()
+
+chainParam = ChainParam(src)
+chainParam.copySrc = src.copy()
+
+detect = DetectCustom()
+detect.handle(chainParam)
+
+if chainParam.dst is None:
+    print('chainParam.dst is Non')
+    sys.exit()
+
+src = chainParam.dst.copy()
+# height, width = chainParam.dst.shape[:2]
+# ratio = width / height
+# new_width = 1024
+# new_height = int(new_width / ratio)
+# src = cv.resize(chainParam.dst, (new_width, new_height))
 
 origin = src.copy()
 height, width, channels = src.shape
@@ -61,7 +80,7 @@ for y in range(0, numRows):
 
         # text prediction bounding box의 starting, ending (x,y) 좌표를 계산한다
         endX = int(offsetX + (cos * xData1[x]) + (sin * xData2[x]))
-        endY = int(offsetY - (sin * xData1[x]) + (cos * xData2[x]))
+        endY = int(offsetY + (sin * xData1[x]) + (cos * xData2[x]))
         startX = int(endX - w)
         startY = int(endY - h)
 
@@ -77,6 +96,7 @@ for (startX, startY, endX, endY) in boxes:
     endX = int(endX * rW)
     endY = int(endY * rH)
 
+    print(startX, startY, endX, endY)
     cv.rectangle(origin, (startX, startY), (endX, endY), (0, 255, 0), 2)
 
 tm.stop()
