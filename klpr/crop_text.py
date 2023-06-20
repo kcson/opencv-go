@@ -48,15 +48,28 @@ def main():
         boxes.append((x, y, w, h))
 
     boxes = remove_inner_box(boxes)
-    for box in boxes:
+    boxes = sort_box(boxes)
+    boxes = merge_box(boxes)
+    for i, box in enumerate(boxes,start=1):
         x, y, w, h = box
         cv.rectangle(src, (x, y, w, h), (0, 0, 255), thickness=1)
+        cv.putText(src, str(i), (x, y), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv.LINE_AA)
 
     # recognition_text(boxes, src_bin)
     cv.imshow('src_bin', src_bin)
     cv.imshow('src', src)
     cv.waitKey()
     cv.destroyAllWindows()
+
+
+def merge_box(boxes):
+    return boxes
+
+
+def sort_box(boxes):
+    sorted_box = []
+    boxes = sorted(boxes, key=lambda box: box[0])
+    return boxes
 
 
 def recognition_text(boxes, src_bin):
