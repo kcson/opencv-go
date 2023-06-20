@@ -7,7 +7,7 @@ import easyocr
 
 
 def main():
-    src = cv.imread('../imgs/vehicle20.jpeg')
+    src = cv.imread('../imgs/vehicle2.jpeg')
     if src is None:
         print('image load fail!!')
         sys.exit()
@@ -48,9 +48,13 @@ def main():
         boxes.append((x, y, w, h))
 
     boxes = remove_inner_box(boxes)
-    boxes = sort_box(boxes)
+
+    sorted_boxes = []
+    boxes = sorted(boxes, key=lambda box: box[0])
+    boxes = sort_box(boxes, sorted_boxes)
+
     boxes = merge_box(boxes)
-    for i, box in enumerate(boxes,start=1):
+    for i, box in enumerate(boxes, start=1):
         x, y, w, h = box
         cv.rectangle(src, (x, y, w, h), (0, 0, 255), thickness=1)
         cv.putText(src, str(i), (x, y), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv.LINE_AA)
@@ -66,10 +70,35 @@ def merge_box(boxes):
     return boxes
 
 
-def sort_box(boxes):
-    sorted_box = []
-    boxes = sorted(boxes, key=lambda box: box[0])
-    return boxes
+def sort_box(boxes, sorted_boxes):
+    for box1 in boxes:
+        if box1 in sorted_boxes:
+            continue
+        is_next_box = True
+        x1, y1, w1, h1 = box1
+        x1_left = x1
+        x1_right = x1 + w1
+        y_top = y1
+        for box2 in boxes:
+            if box2 in sorted_boxes:
+                continue
+            x2, y2, w2, h2 = box2
+            x2_left = x2
+            x2_right = x2 + w2
+            y_bottom = y2 + h2
+            y_bottom_half = y2 + h2 / 2
+            if y_top > y_bottom:
+                is_next_box = False
+                break
+        if not is_next_box:
+            continue
+        sorted_boxes.append(box1)
+        break
+
+    if len(boxes) == len(sorted_boxes):
+        return sorted_boxes
+
+    return sort_box(boxes, sorted_boxes)
 
 
 def recognition_text(boxes, src_bin):
@@ -90,7 +119,7 @@ def is_valid_contour(contour, contours, src) -> bool:
     x, y, w, h = cv.boundingRect(contour)
     if w / h > 6 or w / h < 0.1:
         return False
-    if w * h < 1400:
+    if w * h < 1200:
         return False
     if w / new_width > 0.9 or h / new_height > 0.9:
         return False
