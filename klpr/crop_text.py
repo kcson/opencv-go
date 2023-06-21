@@ -1,4 +1,6 @@
+import os
 import sys
+import unicodedata
 
 import cv2 as cv
 
@@ -7,7 +9,30 @@ import easyocr
 
 
 def main():
-    src = cv.imread('../imgs/vehicle2.jpeg')
+    root = '/Users/kcson/mywork/data/[원천]자동차번호판OCR데이터'
+    train_file_list = os.listdir(root)
+
+    index = 0
+    valid_index = 0
+    h_sum = 0
+    w_sum = 0
+    for file_name in train_file_list:
+        if index == 50:
+            break
+        file_name = unicodedata.normalize('NFC', file_name)
+        label = os.path.splitext(file_name)[0].split('-')[0]
+        # if len(label) > 8:
+        #     continue
+
+        full_path = os.path.join(root, file_name)
+        print(full_path)
+        crop_text(full_path)
+        index += 1
+
+
+def crop_text(full_path):
+    src = cv.imread(full_path)
+    # src = cv.imread('../imgs/vehicle23.jpeg')
     if src is None:
         print('image load fail!!')
         sys.exit()
@@ -21,7 +46,8 @@ def main():
 
     if chainParam.dst is None:
         print('chainParam.dst is Non')
-        sys.exit()
+        # sys.exit()
+        return
 
     src = chainParam.dst
     height, width = src.shape[:2]
@@ -41,13 +67,15 @@ def main():
 
     contours, _ = cv.findContours(src_bin, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
     boxes = []
+    box_contours = []
     for contour in contours:
         x, y, w, h = cv.boundingRect(contour)
         if not is_valid_contour(contour, contours, src):
             continue
         boxes.append((x, y, w, h))
 
-    boxes = remove_inner_box(boxes)
+    boxes = remove_inner_box(boxes, src_bin)
+    # boxes = remove_invalid_box(boxes)
 
     sorted_boxes = []
     boxes = sorted(boxes, key=lambda box: box[0])
@@ -75,19 +103,10 @@ def sort_box(boxes, sorted_boxes):
         if box1 in sorted_boxes:
             continue
         is_next_box = True
-        x1, y1, w1, h1 = box1
-        x1_left = x1
-        x1_right = x1 + w1
-        y_top = y1
         for box2 in boxes:
             if box2 in sorted_boxes:
                 continue
-            x2, y2, w2, h2 = box2
-            x2_left = x2
-            x2_right = x2 + w2
-            y_bottom = y2 + h2
-            y_bottom_half = y2 + h2 / 2
-            if y_top > y_bottom:
+            if not get_is_next_box(box1, box2, boxes):
                 is_next_box = False
                 break
         if not is_next_box:
@@ -99,6 +118,55 @@ def sort_box(boxes, sorted_boxes):
         return sorted_boxes
 
     return sort_box(boxes, sorted_boxes)
+
+
+def get_is_next_box(box1, box2, boxes) -> bool:
+    x1, y1, w1, h1 = box1
+    x2, y2, w2, h2 = box2
+    if y1 > y2 + h2:
+        for box in boxes:
+            if is_overlap_y(box1, box) and is_overlap_y(box, box2):
+                if not is_overlap_x(box1, box2):
+                    return True
+                else:
+                    return False
+        return False
+    if y1 + h1 < y2:
+        return True
+    if x1 + w1 < x2:
+        return True
+    if x1 + w1 < x2 + w2:
+        return True
+    if x1 + w1 >= x2 + w2 and y1 > y2:
+        return False
+    if x1 + w1 >= x2 + w2 and y1 <= y2:
+        return True
+
+    return True
+
+
+def is_overlap_y(box1, box2) -> bool:
+    x1, y1, w1, h1 = box1
+    x2, y2, w2, h2 = box2
+    if y2 <= y1 <= y2 + h2 or y2 <= y1 + h1 <= y2 + h2:
+        return True
+
+    if y1 <= y2 <= y1 + h1 or y1 <= y2 + h2 <= y1 + h1:
+        return True
+
+    return False
+
+
+def is_overlap_x(box1, box2) -> bool:
+    x1, y1, w1, h1 = box1
+    x2, y2, w2, h2 = box2
+
+    if x2 <= x1 <= x2 + w2 or x2 <= x1 + w1 <= x2 + w2:
+        return True
+
+    if x1 <= x2 <= x1 + w1 or x1 <= x2 + w2 <= x1 + w1:
+        return True
+    return False
 
 
 def recognition_text(boxes, src_bin):
@@ -115,9 +183,15 @@ def recognition_text(boxes, src_bin):
 
 
 def is_valid_contour(contour, contours, src) -> bool:
+    # approx = cv.approxPolyDP(contour, 10, True)
+    # cv.drawContours(src, approx, 0, (0, 0, 255), thickness=3)
+    # cv.rectangle(src, cv.boundingRect(approx), (0, 0, 255), thickness=1)
+    # if not cv.isContourConvex(approx):
+    #     return False
+
     new_height, new_width = src.shape[:2]
     x, y, w, h = cv.boundingRect(contour)
-    if w / h > 6 or w / h < 0.1:
+    if w / h > 6 or w / h < 0.15:
         return False
     if w * h < 1200:
         return False
@@ -126,14 +200,37 @@ def is_valid_contour(contour, contours, src) -> bool:
     return True
 
 
-def remove_inner_box(boxes):
-    outer_boxes = []
+def remove_invalid_box(boxes):
+    boxes = sorted(boxes, key=lambda box: box[2] * box[3], reverse=True)
+    max_area = boxes[0][2] * boxes[0][3]
+
+    valid_boxes = []
     for box1 in boxes:
+        x1, y1, w1, h1 = box1
+        if (w1 * h1) / max_area < 0.1:
+            continue
+        valid_boxes.append(box1)
+
+    return valid_boxes
+
+
+def remove_inner_box(boxes, src_bin):
+    outer_boxes = []
+    temp_boxes = []
+    for box1 in boxes:
+        x1_min, y1_min, w1, h1 = box1
+        target = src_bin[y1_min:y1_min + h1, x1_min:x1_min + w1]
+        contours, _ = cv.findContours(target, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
+        if len(contours) > 5:
+            continue
+        temp_boxes.append(box1)
+
+    for box1 in temp_boxes:
         is_inner_box = False
         x1_min, y1_min, w1, h1 = box1
         x1_max = x1_min + w1
         y1_max = y1_min + h1
-        for box2 in boxes:
+        for box2 in temp_boxes:
             x2_min, y2_min, w2, h2 = box2
             x2_max = x2_min + w2
             y2_max = y2_min + h2
@@ -147,3 +244,4 @@ def remove_inner_box(boxes):
 
 if __name__ == "__main__":
     main()
+    # crop_text('')
