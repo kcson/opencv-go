@@ -99,6 +99,14 @@ def merge_box(boxes):
     return boxes
 
 
+def merge(a, b):
+    x = min(a[0], b[0])
+    y = min(a[1], b[1])
+    w = max(a[0] + a[2], b[0] + b[2]) - x
+    h = max(a[1] + a[3], b[1] + b[3]) - y
+    return [x, y, w, h]
+
+
 def sort_box(boxes, sorted_boxes):
     for box1 in boxes:
         if box1 in sorted_boxes:
