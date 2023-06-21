@@ -9,7 +9,8 @@ import easyocr
 
 
 def main():
-    root = '/Users/kcson/mywork/data/[원천]자동차번호판OCR데이터'
+    # root = '/Users/kcson/mywork/data/[원천]자동차번호판OCR데이터'
+    root = '/Users/kcson/mywork/opencv-go/imgs/car'
     train_file_list = os.listdir(root)
 
     index = 0
