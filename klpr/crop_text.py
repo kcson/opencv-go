@@ -62,9 +62,9 @@ def crop_text(full_path):
     # src_bin = cv.adaptiveThreshold(src_bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 4)
     thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU, dst=src_bin)
 
-    kernel = cv.getStructuringElement(cv.MORPH_RECT, (5, 5))
-    # src_bin = cv.erode(src_bin, kernel)
-    # src_bin = cv.dilate(src_bin, kernel)
+    kernel = cv.getStructuringElement(cv.MORPH_RECT, (6, 6))
+    # src_bin = cv.erode(src_bin, kernel, iterations=1)
+    # src_bin = cv.dilate(src_bin, kernel, iterations=1)
 
     contours, _ = cv.findContours(src_bin, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
     boxes = []
