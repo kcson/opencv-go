@@ -1,6 +1,7 @@
 import os
 import sys
 import unicodedata
+import numpy as np
 
 import cv2 as cv
 
@@ -10,7 +11,7 @@ import easyocr
 
 def main():
     # root = '/Users/kcson/mywork/data/[원천]자동차번호판OCR데이터'
-    root = '/Users/kcson/mywork/opencv-go/imgs/car'
+    root = '../imgs/car'
     train_file_list = os.listdir(root)
 
     index = 0
@@ -69,6 +70,7 @@ def crop_text(full_path):
     contours, _ = cv.findContours(src_bin, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
     boxes = []
     box_contours = []
+    box_areas = []
     for contour in contours:
         x, y, w, h = cv.boundingRect(contour)
         if not is_valid_contour(contour, contours, src):
@@ -85,9 +87,13 @@ def crop_text(full_path):
     boxes = merge_box(boxes)
     for i, box in enumerate(boxes, start=1):
         x, y, w, h = box
+        box_areas.append(h * w)
+        print('area : ', h * w, ' ratio : ', w / h)
         cv.rectangle(src, (x, y, w, h), (0, 0, 255), thickness=1)
         cv.putText(src, str(i), (x, y), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv.LINE_AA)
 
+    print('average : ', np.mean(box_areas))
+    print('std     : ', np.std(box_areas))
     # recognition_text(boxes, src_bin)
     cv.imshow('src_bin', src_bin)
     cv.imshow('src', src)
