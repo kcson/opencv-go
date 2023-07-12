@@ -19,7 +19,7 @@ def main():
     h_sum = 0
     w_sum = 0
     for file_name in train_file_list:
-        if index == 50:
+        if index == 100:
             break
         file_name = unicodedata.normalize('NFC', file_name)
         label = os.path.splitext(file_name)[0].split('-')[0]
@@ -71,9 +71,9 @@ def crop_text(full_path):
     boxes = []
     box_contours = []
     box_areas = []
-    for contour in contours:
+    for i, contour in enumerate(contours):
         x, y, w, h = cv.boundingRect(contour)
-        if not is_valid_contour(contour, contours, src):
+        if not is_valid_contour(i, contour, contours, src):
             continue
         boxes.append((x, y, w, h))
 
@@ -83,6 +83,13 @@ def crop_text(full_path):
     sorted_boxes = []
     boxes = sorted(boxes, key=lambda box: box[0])
     boxes = sort_box(boxes, sorted_boxes)
+
+    area = boxes[0][2] * boxes[0][3]
+    if area < 2500:
+        boxes.pop(0)
+    area = boxes[len(boxes) - 1][2] * boxes[len(boxes) - 1][3]
+    if area < 2500:
+        boxes.pop(len(boxes) - 1)
 
     boxes = merge_box(boxes)
     for i, box in enumerate(boxes, start=1):
@@ -138,23 +145,15 @@ def sort_box(boxes, sorted_boxes):
 def get_is_next_box(box1, box2, boxes) -> bool:
     x1, y1, w1, h1 = box1
     x2, y2, w2, h2 = box2
-    if y1 > y2 + h2:
+    if y1 + h1 / 3 >= y2 + h2:
+        # 같은 라인(row)에 있는 box 인지 확인
         for box in boxes:
-            if is_overlap_y(box1, box) and is_overlap_y(box, box2):
-                if not is_overlap_x(box1, box2):
-                    return True
-                else:
-                    return False
+            if is_overlap_y(box1, box) and is_overlap_y(box2, box) and not is_overlap_x(box1, box2):
+                return True
         return False
-    if y1 + h1 < y2:
+    if y1 + h1 <= y2:
         return True
-    if x1 + w1 < x2:
-        return True
-    if x1 + w1 < x2 + w2:
-        return True
-    if x1 + w1 >= x2 + w2 and y1 > y2:
-        return False
-    if x1 + w1 >= x2 + w2 and y1 <= y2:
+    if x1 + w1 <= x2:
         return True
 
     return True
@@ -197,7 +196,7 @@ def recognition_text(boxes, src_bin):
             print(v)
 
 
-def is_valid_contour(contour, contours, src) -> bool:
+def is_valid_contour(index, contour, contours, src) -> bool:
     # approx = cv.approxPolyDP(contour, 10, True)
     # cv.drawContours(src, approx, 0, (0, 0, 255), thickness=3)
     # cv.rectangle(src, cv.boundingRect(approx), (0, 0, 255), thickness=1)
