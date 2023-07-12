@@ -11,7 +11,8 @@ import easyocr
 
 def main():
     # root = '/Users/kcson/mywork/data/[원천]자동차번호판OCR데이터'
-    root = '../imgs/car'
+    # root = '../imgs/car'
+    root = '/Users/kcson/mywork/data/lpr_pre'
     train_file_list = os.listdir(root)
 
     index = 0
@@ -207,7 +208,7 @@ def is_valid_contour(index, contour, contours, src) -> bool:
     x, y, w, h = cv.boundingRect(contour)
     if w / h > 6 or w / h < 0.15:
         return False
-    if w * h < 1200:
+    if w * h < 1200 or w * h > 50000:
         return False
     if w / new_width > 0.9 or h / new_height > 0.9:
         return False
