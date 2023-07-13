@@ -40,6 +40,12 @@ def crop_text(full_path):
         print('image load fail!!')
         sys.exit()
 
+    height, width = src.shape[:2]
+    ratio = width / height
+    new_width = 1024
+    new_height = int(new_width / ratio)
+    src = cv.resize(src, (new_width, new_height))
+
     chainParam = ChainParam(src)
     chainParam.copySrc = src.copy()
 
@@ -53,11 +59,11 @@ def crop_text(full_path):
         return
 
     src = chainParam.dst
-    height, width = src.shape[:2]
-    ratio = width / height
-    new_width = 1024
-    new_height = int(new_width / ratio)
-    src = cv.resize(chainParam.dst, (new_width, new_height))
+    # height, width = src.shape[:2]
+    # ratio = width / height
+    # new_width = 1024
+    # new_height = int(new_width / ratio)
+    # src = cv.resize(chainParam.dst, (new_width, new_height))
 
     src_bin = cv.cvtColor(src, cv.COLOR_BGR2GRAY)
     src_bin = cv.GaussianBlur(src_bin, (0, 0), 2, sigmaY=0, borderType=cv.BORDER_DEFAULT)
@@ -71,7 +77,6 @@ def crop_text(full_path):
     contours, _ = cv.findContours(src_bin, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
     boxes = []
     box_contours = []
-    box_areas = []
     for i, contour in enumerate(contours):
         x, y, w, h = cv.boundingRect(contour)
         if not is_valid_contour(i, contour, contours, src):
@@ -79,29 +84,20 @@ def crop_text(full_path):
         boxes.append((x, y, w, h))
 
     boxes = remove_inner_box(boxes, src_bin)
-    # boxes = remove_invalid_box(boxes)
 
     sorted_boxes = []
     boxes = sorted(boxes, key=lambda box: box[0])
     boxes = sort_box(boxes, sorted_boxes)
 
-    area = boxes[0][2] * boxes[0][3]
-    if area < 2500:
-        boxes.pop(0)
-    area = boxes[len(boxes) - 1][2] * boxes[len(boxes) - 1][3]
-    if area < 2500:
-        boxes.pop(len(boxes) - 1)
+    boxes = remove_invalid_box(boxes)
 
     boxes = merge_box(boxes)
     for i, box in enumerate(boxes, start=1):
         x, y, w, h = box
-        box_areas.append(h * w)
         print('area : ', h * w, ' ratio : ', w / h)
         cv.rectangle(src, (x, y, w, h), (0, 0, 255), thickness=1)
         cv.putText(src, str(i), (x, y), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv.LINE_AA)
 
-    print('average : ', np.mean(box_areas))
-    print('std     : ', np.std(box_areas))
     # recognition_text(boxes, src_bin)
     cv.imshow('src_bin', src_bin)
     cv.imshow('src', src)
@@ -208,7 +204,7 @@ def is_valid_contour(index, contour, contours, src) -> bool:
     x, y, w, h = cv.boundingRect(contour)
     if w / h > 6 or w / h < 0.15:
         return False
-    if w * h < 1200 or w * h > 50000:
+    if w * h < 1200:  # or w * h > 50000:
         return False
     if w / new_width > 0.9 or h / new_height > 0.9:
         return False
@@ -216,15 +212,32 @@ def is_valid_contour(index, contour, contours, src) -> bool:
 
 
 def remove_invalid_box(boxes):
-    boxes = sorted(boxes, key=lambda box: box[2] * box[3], reverse=True)
-    max_area = boxes[0][2] * boxes[0][3]
-
     valid_boxes = []
-    for box1 in boxes:
-        x1, y1, w1, h1 = box1
-        if (w1 * h1) / max_area < 0.1:
-            continue
-        valid_boxes.append(box1)
+    if len(boxes) == 0:
+        return valid_boxes
+
+    area = boxes[0][2] * boxes[0][3]
+    if area < 2500:
+        boxes.pop(0)
+    area = boxes[len(boxes) - 1][2] * boxes[len(boxes) - 1][3]
+    if area < 2500:
+        boxes.pop(len(boxes) - 1)
+
+    box_areas = []
+    # valid_boxes = []
+    for box in boxes:
+        area = box[2] * box[3]
+        box_areas.append(area)
+        print('area : ', area)
+
+    # box_areas.remove(max(box_areas))
+    # box_areas.remove(min(box_areas))
+
+    average = np.mean(box_areas)
+    std = np.std(box_areas)
+    print('average : ', average)
+    print('std     : ', std)
+    valid_boxes = filter(lambda b: abs((b[2] * b[3] - average) / std) < 4.0, boxes)
 
     return valid_boxes
 
