@@ -187,7 +187,8 @@ class DetectCustom(AbstractHandler):
 
         gray = cv.cvtColor(param.src, cv.COLOR_BGR2GRAY)
         src_bin = cv.GaussianBlur(gray, (0, 0), 2, sigmaY=0, borderType=cv.BORDER_DEFAULT)
-        src_bin = cv.adaptiveThreshold(src_bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 4)
+        thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU, dst=src_bin)
+        # src_bin = cv.adaptiveThreshold(src_bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 4)
         param.pre = cv.dilate(src_bin, None, iterations=1)
 
         min_pts = None
@@ -336,6 +337,7 @@ class RecognitionEasy(AbstractHandler):
             if ('가' <= v <= '힣') or v.isdigit():
                 result_vehicle_no = result_vehicle_no + v
 
+        param.vehicle_no = result_vehicle_no
         p = re.compile('[0-9]{2,3}[가-힣]{1}[0-9]{4}|[가-힣]{2}[0-9]{2}[가-힣]{1}[0-9]{4}')
         m = p.match(result_vehicle_no)
         if m is not None:
@@ -452,7 +454,7 @@ if __name__ == "__main__":
         chainParam.copySrc = Image.fromarray(chainParam.copySrc)
         draw = ImageDraw.Draw(chainParam.copySrc)
         font = ImageFont.truetype("AppleGothic.ttf", 50)
-        draw.text((x, y - 50), chainParam.vehicle_no, font=font, fill=(0, 255, 255))
+        draw.text((x, y - 50), chainParam.vehicle_no, font=font, fill=(255, 255, 255))
         chainParam.copySrc = np.array(chainParam.copySrc)
         print(chainParam.vehicle_no)
 
