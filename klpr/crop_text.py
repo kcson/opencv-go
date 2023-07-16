@@ -28,16 +28,20 @@ def main():
         #     continue
 
         full_path = os.path.join(root, file_name)
-        if os.path.getsize(full_path) < 30 * 1024:
+        if os.path.getsize(full_path) < 35 * 1024:
             continue
         print(full_path)
-        if crop_text(full_path):
-            index += 1
+        try:
+            if crop_text(full_path, label):
+                index += 1
+                print('index : ', index)
+        except Exception as e:
+            print(e)
 
     print('index : ', index)
 
 
-def crop_text(full_path):
+def crop_text(full_path, label=''):
     src = cv.imread(full_path)
     # src = cv.imread('../imgs/car/vehicle25.jpeg')
     if src is None:
@@ -83,12 +87,35 @@ def crop_text(full_path):
 
     contours, _ = cv.findContours(src_bin, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
 
-    # contour 면적이 너무 작거나 큰 contour 제거
-    contours = check_area(contours, area_thres_min=750, area_thres_max=60000)
-    # 내부에 있는 contour 제거
-    contours = remove_inner_box(contours)
-    # contour 정렬(위->아래, 좌->우)
-    contours = sort_contour(contours)
+    # contour -> box
+    boxes = contours_to_boxes(contours)
+
+    # contour 면적이 너무 작거나 큰 box 제거
+    boxes = check_area(boxes, area_thres_min=750, area_thres_max=60000, ratio_thres_min=0.11, ratio_thres_max=5.5)
+
+    # 내부에 있는 box 제거
+    boxes = remove_inner_box(boxes)
+
+    # 면적이 다른 box 와 차이가 많이 나는 box 제거
+    boxes = check_area_diff(boxes, min_thres=0.2, max_thres=2.9)
+
+    # y 축으로 떨어져 있는 box 제거
+    boxes = check_y_diff(boxes)
+
+    # box 정렬(위->아래, 좌->우)
+    boxes = sort_box(boxes)
+
+    # box merge
+    # boxes = merge_box(boxes)
+
+    # contour 면적이 너무 작거나 큰 box 제거
+    # boxes = check_area(boxes, area_thres_min=2000, area_thres_max=60000, ratio_thres_max=2.0)
+
+    # 면적이 다른 box 와 차이가 많이 나는 box 제거
+    # boxes = check_area_diff(boxes, min_thres=0.5, max_thres=2.0)
+
+    # y 축으로 떨어져 있는 box 제거
+    # boxes = check_y_diff(boxes)
 
     # boxes = []
     # box_contours = []
@@ -102,8 +129,8 @@ def crop_text(full_path):
     # boxes = sort_box(boxes)
     # boxes = remove_invalid_box(boxes)
     # boxes = merge_box(boxes)
-    for i, contour in enumerate(contours, start=1):
-        x, y, w, h = cv.boundingRect(contour)
+    for i, box in enumerate(boxes, start=1):
+        x, y, w, h = box
         print('area : ', h * w, ' ratio : ', w / h)
         cv.rectangle(src, (x, y, w, h), (0, 0, 255), thickness=1)
         cv.putText(src, str(i), (x, y), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv.LINE_AA)
@@ -114,73 +141,114 @@ def crop_text(full_path):
     cv.waitKey()
     cv.destroyAllWindows()
 
+    if label != '' and len(label) != len(boxes):
+        return False
+
     return True
 
 
-def check_area(contours, area_thres_min=1200, area_thres_max=50000) -> list:
-    valid_contours = []
-    for i, contour in enumerate(contours):
-        x, y, w, h = cv.boundingRect(contour)
+def check_y_diff(boxes, valid_thres=3):
+    valid_boxes = []
+    for box1 in boxes:
+        valid_count = 0
+        for box2 in boxes:
+            if is_overlap_y(box1, box2):
+                valid_count += 1
+        if valid_count < valid_thres:
+            continue
+        valid_boxes.append(box1)
+
+    return valid_boxes
+
+
+def check_area_diff(boxes, valid_thres=3, min_thres=0.5, max_thres=2.0):
+    valid_boxes = []
+    for box1 in boxes:
+        area1 = box1[2] * box1[3]
+        valid_count = 0
+        for box2 in boxes:
+            area2 = box2[2] * box2[3]
+            if min_thres < area2 / area1 < max_thres:
+                valid_count += 1
+        if valid_count < valid_thres:
+            continue
+        valid_boxes.append(box1)
+
+    return valid_boxes
+
+
+def contours_to_boxes(contours):
+    boxes = []
+    for contour in contours:
+        boxes.append(cv.boundingRect(contour))
+
+    return boxes
+
+
+def check_area(boxes, area_thres_min=1200, area_thres_max=50000, ratio_thres_min=0.15, ratio_thres_max=6.0) -> list:
+    valid_boxes = []
+    for i, box in enumerate(boxes):
+        x, y, w, h = box
         print('area : ', w * h)
-        if w / h > 6 or w / h < 0.15:
+        if w / h > ratio_thres_max or w / h < ratio_thres_min:
             continue
         if w * h < area_thres_min or w * h > area_thres_max:
             continue
         # if w / h > 3.5:
         #     continue
-        valid_contours.append(contour)
+        valid_boxes.append(box)
 
-    return valid_contours
+    return valid_boxes
 
 
-def remove_inner_box(contours):
-    outer_contours = []
-    for contour1 in contours:
+def remove_inner_box(boxes):
+    outer_boxes = []
+    for box1 in boxes:
         is_inner_box = False
-        x1_min, y1_min, w1, h1 = cv.boundingRect(contour1)
+        x1_min, y1_min, w1, h1 = box1
         x1_max = x1_min + w1
         y1_max = y1_min + h1
-        for contour2 in contours:
-            x2_min, y2_min, w2, h2 = cv.boundingRect(contour2)
+        for box2 in boxes:
+            x2_min, y2_min, w2, h2 = box2
             x2_max = x2_min + w2
             y2_max = y2_min + h2
             if x1_min > x2_min and x1_max < x2_max and y1_min > y2_min and y1_max < y2_max:
                 is_inner_box = True
                 break
         if not is_inner_box:
-            outer_contours.append(contour1)
+            outer_boxes.append(box1)
 
-    return outer_contours
+    return outer_boxes
 
 
-def sort_contour(contours):
-    sorted_contours = []
+def sort_box(boxes):
+    sorted_boxes = []
     # x축 방향 정렬
-    contours = sorted(contours, key=lambda contour: cv.boundingRect(contour)[0])
+    boxes = sorted(boxes, key=lambda box: box[0])
 
-    return sort_contour_y(contours, sorted_contours)
+    return sort_box_y(boxes, sorted_boxes)
 
 
-def sort_contour_y(contours, sorted_contours):
-    for contour1 in contours:
-        if is_contain_contour(sorted_contours, contour1):
+def sort_box_y(boxes, sorted_boxes):
+    for box1 in boxes:
+        if box1 in sorted_boxes:
             continue
         is_next_box = True
-        for contour2 in contours:
-            if is_contain_contour(sorted_contours, contour2):
+        for box2 in boxes:
+            if box2 in sorted_boxes:
                 continue
-            if not get_is_next_box(contour1, contour2, contours):
+            if not get_is_next_box(box1, box2, boxes):
                 is_next_box = False
                 break
         if not is_next_box:
             continue
-        sorted_contours.append(contour1)
+        sorted_boxes.append(box1)
         break
 
-    if len(contours) == len(sorted_contours):
-        return sorted_contours
+    if len(boxes) == len(sorted_boxes):
+        return sorted_boxes
 
-    return sort_contour_y(contours, sorted_contours)
+    return sort_box_y(boxes, sorted_boxes)
 
 
 def is_contain_contour(sorted_contours, contour) -> bool:
@@ -192,13 +260,13 @@ def is_contain_contour(sorted_contours, contour) -> bool:
     return False
 
 
-def get_is_next_box(contour1, contour2, contours) -> bool:
-    x1, y1, w1, h1 = cv.boundingRect(contour1)
-    x2, y2, w2, h2 = cv.boundingRect(contour2)
+def get_is_next_box(box1, box2, boxes) -> bool:
+    x1, y1, w1, h1 = box1
+    x2, y2, w2, h2 = box2
     if y1 + h1 / 3 >= y2 + h2:
         # 같은 라인(row)에 있는 box 인지 확인
-        for contour in contours:
-            if is_overlap_y(contour1, contour) and is_overlap_y(contour2, contour) and not is_overlap_x(contour1, contour2):
+        for box in boxes:
+            if is_overlap_y(box1, box) and is_overlap_y(box2, box) and not is_overlap_x(box1, box2):
                 return True
         return False
     if y1 + h1 <= y2:
@@ -210,7 +278,63 @@ def get_is_next_box(contour1, contour2, contours) -> bool:
 
 
 def merge_box(boxes):
-    return boxes
+    can_merge_area_min = 0.4
+    can_merge_area_max = 2.1
+    index = 0
+    merged_boxes = []
+    while index < len(boxes):
+        if index > len(boxes) - 3:
+            merged_boxes.append(boxes[index])
+            index += 1
+            continue
+        ratio1 = boxes[index][2] / boxes[index][3]
+        ratio2 = boxes[index + 1][2] / boxes[index + 1][3]
+        ratio3 = boxes[index + 2][2] / boxes[index + 2][3]
+        # 자음-모음-자음
+        if ratio1 > 1 > ratio2 and ratio3 > 1:
+            ratio4 = boxes[index + 3][2] / boxes[index + 3][3]
+            ratio5 = boxes[index + 4][2] / boxes[index + 4][3]
+            ratio6 = boxes[index + 5][2] / boxes[index + 5][3]
+            if ratio4 > 1 > ratio5 and ratio6 > 1:
+                merged_box = merge(merge(boxes[index], boxes[index + 1]), boxes[index + 2])
+                merged_boxes.append(merged_box)
+                index += 3
+                continue
+            if ratio4 > 1 and ratio5 > 1:
+                merged_box = merge(boxes[index], boxes[index + 1])
+                merged_boxes.append(merged_box)
+                index += 2
+                continue
+            if ratio5 < 0.35:
+                merged_box = merge(merge(boxes[index], boxes[index + 1]), boxes[index + 2])
+                merged_boxes.append(merged_box)
+                index += 3
+                continue
+            if can_merge_area_min < (boxes[index][2] * boxes[index][3]) / (boxes[index + 1][2] * boxes[index + 1][3]) < can_merge_area_max:
+                merged_box = merge(boxes[index], boxes[index + 1])  # merge(merge(boxes[index], boxes[index + 1]), boxes[index + 2])
+                merged_boxes.append(merged_box)
+                index += 2
+                continue
+
+        # 자음-모음(오른쪽)
+        if ratio2 < 0.35 and index + 1 <= len(boxes) - 4:
+            merged_box = merge(boxes[index], boxes[index + 1])
+            merged_boxes.append(merged_box)
+            index += 2
+            continue
+
+        # 자음-모음(아래)
+        if ratio1 > 1 and ratio2 > 1:
+            if can_merge_area_min < (boxes[index][2] * boxes[index][3]) / (boxes[index + 1][2] * boxes[index + 1][3]) < can_merge_area_max:
+                merged_box = merge(boxes[index], boxes[index + 1])
+                merged_boxes.append(merged_box)
+                index += 2
+                continue
+
+        merged_boxes.append(boxes[index])
+        index += 1
+
+    return merged_boxes
 
 
 def merge(a, b):
@@ -221,22 +345,22 @@ def merge(a, b):
     return [x, y, w, h]
 
 
-def is_overlap_y(contour1, contour2) -> bool:
-    x1, y1, w1, h1 = cv.boundingRect(contour1)
-    x2, y2, w2, h2 = cv.boundingRect(contour2)
+def is_overlap_y(box1, box2, epsilon=0) -> bool:
+    x1, y1, w1, h1 = box1
+    x2, y2, w2, h2 = box2
 
-    if y2 <= y1 <= y2 + h2 or y2 <= y1 + h1 <= y2 + h2:
+    if y2 <= y1 - epsilon <= y2 + h2 or y2 <= y1 + h1 - epsilon <= y2 + h2:
         return True
 
-    if y1 <= y2 <= y1 + h1 or y1 <= y2 + h2 <= y1 + h1:
+    if y1 <= y2 - epsilon <= y1 + h1 or y1 <= y2 + h2 - epsilon <= y1 + h1:
         return True
 
     return False
 
 
-def is_overlap_x(contour1, contour2) -> bool:
-    x1, y1, w1, h1 = cv.boundingRect(contour1)
-    x2, y2, w2, h2 = cv.boundingRect(contour2)
+def is_overlap_x(box1, box2) -> bool:
+    x1, y1, w1, h1 = box1
+    x2, y2, w2, h2 = box2
 
     if x2 <= x1 <= x2 + w2 or x2 <= x1 + w1 <= x2 + w2:
         return True
