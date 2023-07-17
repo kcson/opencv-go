@@ -13,6 +13,7 @@ def main():
     # root = '/Users/kcson/mywork/data/[원천]자동차번호판OCR데이터'
     # root = '../imgs/car'
     root = '/Users/kcson/mywork/data/lpr_pre'
+    # root = '/Users/kcson/mywork/data/lpr_pre_auto_gen'
     train_file_list = os.listdir(root)
 
     index = 0
@@ -28,11 +29,11 @@ def main():
         #     continue
 
         full_path = os.path.join(root, file_name)
-        if os.path.getsize(full_path) < 35 * 1024:
-            continue
+        # if os.path.getsize(full_path) < 30 * 1024:
+        #     continue
         print(full_path)
         try:
-            if crop_text(full_path, label):
+            if crop_text(full_path, ''):
                 index += 1
                 print('index : ', index)
         except Exception as e:
@@ -63,7 +64,7 @@ def crop_text(full_path, label=''):
     detect.set_next(DetectYolo())
     detect.handle(chainParam)
 
-    # chainParam.dst = src
+    chainParam.dst = src
     if chainParam.dst is None:
         print('chainParam.dst is Non')
         # sys.exit()
@@ -80,7 +81,6 @@ def crop_text(full_path, label=''):
     src_bin = cv.GaussianBlur(src_bin, (0, 0), 3, sigmaY=0, borderType=cv.BORDER_DEFAULT)
     # src_bin = cv.adaptiveThreshold(src_bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 4)
     thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU, dst=src_bin)
-
     kernel = cv.getStructuringElement(cv.MORPH_RECT, (6, 6))
     # src_bin = cv.dilate(src_bin, kernel, iterations=1)
     # src_bin = cv.erode(src_bin, kernel, iterations=2)
@@ -97,13 +97,16 @@ def crop_text(full_path, label=''):
     boxes = remove_inner_box(boxes)
 
     # 면적이 다른 box 와 차이가 많이 나는 box 제거
-    boxes = check_area_diff(boxes, min_thres=0.2, max_thres=2.9)
+    boxes = check_area_diff(boxes, min_thres=0.1, max_thres=3.0)
 
     # y 축으로 떨어져 있는 box 제거
     boxes = check_y_diff(boxes)
 
     # box 정렬(위->아래, 좌->우)
     boxes = sort_box(boxes)
+
+    # 기타 유효 하지 않은 box 제거
+    # boxes = remove_invalid_box(boxes)
 
     # box merge
     # boxes = merge_box(boxes)
@@ -287,20 +290,26 @@ def merge_box(boxes):
             merged_boxes.append(boxes[index])
             index += 1
             continue
+        box1 = boxes[index]
+        box2 = boxes[index + 1]
+        box3 = boxes[index + 2]
         ratio1 = boxes[index][2] / boxes[index][3]
         ratio2 = boxes[index + 1][2] / boxes[index + 1][3]
         ratio3 = boxes[index + 2][2] / boxes[index + 2][3]
         # 자음-모음-자음
-        if ratio1 > 1 > ratio2 and ratio3 > 1:
+        if is_overlap_y(box1, box2) and is_overlap_x(box1, box3) and is_overlap_x(box2, box3):  # ratio1 > 1 > ratio2 and ratio3 > 1:
+            box4 = boxes[index + 3]
+            box5 = boxes[index + 4]
+            box6 = boxes[index + 5]
             ratio4 = boxes[index + 3][2] / boxes[index + 3][3]
             ratio5 = boxes[index + 4][2] / boxes[index + 4][3]
             ratio6 = boxes[index + 5][2] / boxes[index + 5][3]
-            if ratio4 > 1 > ratio5 and ratio6 > 1:
+            if is_overlap_x(box3, box4) and is_overlap_x(box3, box5):  # ratio4 > 1 > ratio5 and ratio6 > 1:
                 merged_box = merge(merge(boxes[index], boxes[index + 1]), boxes[index + 2])
                 merged_boxes.append(merged_box)
                 index += 3
                 continue
-            if ratio4 > 1 and ratio5 > 1:
+            if is_overlap_x(box3, box4):  # ratio4 > 1 and ratio5 > 1:
                 merged_box = merge(boxes[index], boxes[index + 1])
                 merged_boxes.append(merged_box)
                 index += 2
@@ -413,21 +422,8 @@ def remove_invalid_box(boxes):
     if area < 2500:  # or area > 70000:
         boxes.pop(len(boxes) - 1)
 
-    box_areas = []
-    # valid_boxes = []
     for box in boxes:
-        area = box[2] * box[3]
-        box_areas.append(area)
-        print('area : ', area)
-
-    # box_areas.remove(max(box_areas))
-    # box_areas.remove(min(box_areas))
-
-    average = np.mean(box_areas)
-    std = np.std(box_areas)
-    print('average : ', average)
-    print('std     : ', std)
-    valid_boxes = filter(lambda b: abs((b[2] * b[3] - average) / std) < 4.0, boxes)
+        valid_boxes.append(box)
 
     return valid_boxes
 
