@@ -29,8 +29,8 @@ def main():
         #     continue
 
         full_path = os.path.join(root, file_name)
-        # if os.path.getsize(full_path) < 30 * 1024:
-        #     continue
+        if os.path.getsize(full_path) < 30 * 1024:
+            continue
         print(full_path)
         try:
             if crop_text(full_path, ''):
