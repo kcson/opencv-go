@@ -454,7 +454,7 @@ if __name__ == "__main__":
         chainParam.copySrc = Image.fromarray(chainParam.copySrc)
         draw = ImageDraw.Draw(chainParam.copySrc)
         font = ImageFont.truetype("AppleGothic.ttf", 50)
-        draw.text((x, y - 50), chainParam.vehicle_no, font=font, fill=(255, 255, 255))
+        draw.text((x, y - 50), chainParam.vehicle_no, font=font, fill=(0, 255, 255))
         chainParam.copySrc = np.array(chainParam.copySrc)
         print(chainParam.vehicle_no)
 
