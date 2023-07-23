@@ -11,9 +11,9 @@ import easyocr
 
 def main():
     # root = '/Users/kcson/mywork/data/[원천]자동차번호판OCR데이터'
-    # root = '../imgs/car'
+    root = '../imgs/car'
     # root = '/Users/kcson/mywork/data/lpr_pre'
-    root = '/Users/kcson/mywork/data/lpr_pre_auto_gen'
+    # root = '/Users/kcson/mywork/data/lpr_pre_auto_gen'
     train_file_list = os.listdir(root)
 
     index = 0
@@ -21,7 +21,7 @@ def main():
     h_sum = 0
     w_sum = 0
     for file_name in train_file_list:
-        if index == 50:
+        if index == 150:
             break
         file_name = unicodedata.normalize('NFC', file_name)
         label = os.path.splitext(file_name)[0].split('-')[0]
@@ -64,7 +64,7 @@ def crop_text(full_path, label=''):
     # detect.set_next(DetectYolo())
     detect.handle(chainParam)
 
-    chainParam.dst = src
+    # chainParam.dst = src
     if chainParam.dst is None:
         print('chainParam.dst is Non')
         # sys.exit()
@@ -97,7 +97,7 @@ def crop_text(full_path, label=''):
     boxes = remove_inner_box(boxes)
 
     # 면적이 다른 box 와 차이가 많이 나는 box 제거
-    boxes = check_area_diff(boxes, min_thres=0.1, max_thres=3.0)
+    boxes = check_area_diff(boxes, min_thres=0.1, max_thres=3.5)
 
     # y 축으로 떨어져 있는 box 제거
     boxes = check_y_diff(boxes)
@@ -106,35 +106,26 @@ def crop_text(full_path, label=''):
     boxes = sort_box(boxes)
 
     # 기타 유효 하지 않은 box 제거
-    boxes = remove_invalid_box(boxes)
+    boxes = remove_invalid_box(boxes, min_area=2000)
+
+    # 면적이 다른 box 와 차이가 많이 나는 box 제거
+    boxes = check_area_diff(boxes, min_thres=0.1, max_thres=3.5)
 
     # box merge
     boxes = merge_box(boxes)
 
     # 기타 유효 하지 않은 box 제거
-    # boxes = remove_invalid_box(boxes)
+    boxes = remove_invalid_box(boxes, min_area=2500)
 
     # contour 면적이 너무 작거나 큰 box 제거
-    # boxes = check_area(boxes, area_thres_min=2000, area_thres_max=60000, ratio_thres_max=2.0)
-
-    # 면적이 다른 box 와 차이가 많이 나는 box 제거
-    # boxes = check_area_diff(boxes, min_thres=0.5, max_thres=2.0)
+    boxes = check_area(boxes, area_thres_min=2000, area_thres_max=60000, ratio_thres_max=2.0)
 
     # y 축으로 떨어져 있는 box 제거
     boxes = check_y_diff(boxes)
 
-    # boxes = []
-    # box_contours = []
-    # for i, contour in enumerate(contours):
-    #     x, y, w, h = cv.boundingRect(contour)
-    #     if not is_valid_contour(i, contour, contours, src):
-    #         continue
-    #     boxes.append((x, y, w, h))
-    #
-    # boxes = remove_inner_box(boxes, src_bin)
-    # boxes = sort_box(boxes)
-    # boxes = remove_invalid_box(boxes)
-    # boxes = merge_box(boxes)
+    # 면적이 다른 box 와 차이가 많이 나는 box 제거
+    boxes = check_area_diff(boxes, min_thres=0.5, max_thres=2.0)
+
     for i, box in enumerate(boxes, start=1):
         x, y, w, h = box
         print('area : ', h * w, ' ratio : ', w / h)
@@ -287,77 +278,100 @@ def merge_box(boxes):
     index = 0
     merged_boxes = []
     while index < len(boxes):
-        merge_box_count = get_merge_box_count(index, boxes)
-        if merge_box_count == 1:
-            merged_boxes.append(boxes[index])
-            index += 1
-        elif merge_box_count == 2:
-            merged_boxes.append(boxes[index])
-            merged_boxes.append(boxes[index + 1])
-            index += 2
-        elif merge_box_count == 3:
-            merged_boxes.append(boxes[index])
-            merged_boxes.append(merge(boxes[index + 1], boxes[index + 2]))
-            index += 3
-        elif merge_box_count == 4:
-            merged_boxes.append(merge(boxes[index], boxes[index + 1]))
-            merged_boxes.append(merge(boxes[index + 2], boxes[index + 3]))
-            index += 4
-        elif merge_box_count == 5:
-            merged_boxes.append(merge(merge(boxes[index], boxes[index + 1]), boxes[index + 2]))
-            merged_boxes.append(merge(boxes[index + 3], boxes[index + 4]))
-            index += 5
-        elif merge_box_count == 6:
-            merged_boxes.append(merge(merge(boxes[index], boxes[index + 1]), boxes[index + 2]))
-            merged_boxes.append(merge(merge(boxes[index + 3], boxes[index + 4]), boxes[index + 5]))
-            index += 6
+        merge_box_count, row_index = get_merge_box_count(index, boxes)
+        if row_index == 0:
+            start_box = boxes[index]
+            for i in range(index + 1, index + merge_box_count):
+                start_box = merge(start_box, boxes[i])
+            merged_boxes.append(start_box)
+            index += merge_box_count
+        else:
+            if merge_box_count == 1:
+                merged_boxes.append(boxes[index])
+                index += 1
+            elif merge_box_count == 2:
+                merged_boxes.append(boxes[index])
+                merged_boxes.append(boxes[index + 1])
+                index += 2
+            elif merge_box_count == 3:
+                merged_boxes.append(boxes[index])
+                merged_boxes.append(merge(boxes[index + 1], boxes[index + 2]))
+                index += 3
+            elif merge_box_count == 4:
+                merged_boxes.append(merge(boxes[index], boxes[index + 1]))
+                merged_boxes.append(merge(boxes[index + 2], boxes[index + 3]))
+                index += 4
+            elif merge_box_count == 5:
+                merged_boxes.append(merge(merge(boxes[index], boxes[index + 1]), boxes[index + 2]))
+                merged_boxes.append(merge(boxes[index + 3], boxes[index + 4]))
+                index += 5
+            elif merge_box_count == 6:
+                merged_boxes.append(merge(merge(boxes[index], boxes[index + 1]), boxes[index + 2]))
+                merged_boxes.append(merge(merge(boxes[index + 3], boxes[index + 4]), boxes[index + 5]))
+                index += 6
+            else:
+                merged_boxes.append(boxes[index])
+                index += 1
 
-    return merged_boxes
+    index = 0
+    result_boxes = []
+    while index < len(merged_boxes):
+        box1 = merged_boxes[index]
+        if index == len(merged_boxes) - 1:
+            result_boxes.append(box1)
+            break
+        box2 = merged_boxes[index + 1]
+        if is_overlap_x(box1, box2) and index > 0:
+            result_boxes.append(merge(box1, box2))
+            index += 2
+            continue
+        if box2[2] / box2[3] < 0.35:
+            if (index + 1 == len(merged_boxes) - 5) or \
+                    (get_row_index(box1, boxes) == 0 and index + 1 == 2):
+                result_boxes.append(merge(box1, box2))
+                index += 2
+                continue
+        result_boxes.append(box1)
+        index += 1
+    return result_boxes
 
 
 def get_merge_box_count(index, boxes):
-    temp_box_group = [boxes[index]]
-    merge_box_count = 0
-    for i in range(index + 1, index + 6):
-        if i > len(boxes) - 1:
-            break
-        for box in boxes:
-            if is_overlap_y(temp_box_group[0], box) and is_overlap_y(boxes[i], box):
-                temp_box_group.append(boxes[i])
-                break
+    row_index = 0
+    max_index = index
+    start_boxs = [boxes[index]]
 
-    if len(temp_box_group) <= 1:
-        return len(temp_box_group)
+    for i in range(index + 1, len(boxes)):
+        box1 = boxes[i]
+        for start_box in start_boxs:
+            overlap_x = False
+            if is_overlap_x(start_box, box1):
+                for box in boxes:
+                    if is_overlap_y(start_box, box) and is_overlap_y(box1, box):
+                        max_index = i
+                        start_boxs.append(box1)
+                        overlap_x = True
+                        break
+                if overlap_x:
+                    break
 
-    overlap_x_boxes = [temp_box_group[0]]
-    for i in range(1, len(temp_box_group)):
-        box1 = temp_box_group[i]
-        for j in range(0, len(temp_box_group)):
-            box2 = temp_box_group[j]
-            if box1 == box2:
-                continue
-            if is_overlap_x(box1, box2):
-                overlap_x_boxes.append(box1)
-                break
+    row_index = get_row_index(start_boxs[len(start_boxs) - 1], boxes)
 
-    if len(overlap_x_boxes) <= 1:
-        return len(overlap_x_boxes)
+    merge_box_count = max_index - index + 1
+    return merge_box_count, row_index
 
-    same_row_boxes = [overlap_x_boxes[0]]
-    box1 = overlap_x_boxes[0]
-    for i in range(1, len(overlap_x_boxes)):
-        box2 = overlap_x_boxes[i]
-        for box in boxes:
-            if is_overlap_y(box1, box) and is_overlap_y(box2, box):
-                same_row_boxes.append(box2)
-                break
 
-    merge_box_count = len(same_row_boxes)
-    if merge_box_count == 3:
-        if boxes[index + 4][2] / boxes[index + 4][3] < 0.35:
-            merge_box_count = 5
-
-    return merge_box_count
+def get_row_index(box, boxes):
+    under_box_count = 0
+    for box1 in boxes:
+        if box[1] + box[3] < box1[1]:
+            for box2 in boxes:
+                if is_overlap_y(box, box2) and is_overlap_y(box1, box2):
+                    continue
+            under_box_count += 1
+    if under_box_count < 4:
+        return 1
+    return 0
 
 
 def merge(a, b):
@@ -424,16 +438,17 @@ def is_valid_contour(index, contour, contours, src) -> bool:
     return True
 
 
-def remove_invalid_box(boxes):
+def remove_invalid_box(boxes, min_area=2500, max_area=70000, min_ratio=0.95):
     valid_boxes = []
     if len(boxes) == 0:
         return valid_boxes
 
     area = boxes[0][2] * boxes[0][3]
-    if area < 2500:
+    if area < min_area:
         boxes.pop(0)
     area = boxes[len(boxes) - 1][2] * boxes[len(boxes) - 1][3]
-    if area < 2500:  # or area > 70000:
+    ratio = boxes[len(boxes) - 1][2] / boxes[len(boxes) - 1][3]
+    if area < min_area or ratio > min_ratio:  # or area > 70000:
         boxes.pop(len(boxes) - 1)
 
     for box in boxes:
@@ -444,4 +459,4 @@ def remove_invalid_box(boxes):
 
 if __name__ == "__main__":
     main()
-    # crop_text('')
+    # crop_text('/Users/kcson/mywork/data/lpr_pre_auto_gen/Z04dh5052X.jpg')
