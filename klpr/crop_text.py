@@ -7,13 +7,16 @@ import cv2 as cv
 
 from ch07.vehicle_no_2 import ChainParam, DetectCustom, DetectYolo
 import easyocr
+from hangul_jamo import compose
+
+train_root = '/Users/kcson/mywork/data/lpr_train'
 
 
 def main():
     # root = '/Users/kcson/mywork/data/[원천]자동차번호판OCR데이터'
-    root = '../imgs/car'
+    # root = '../imgs/car'
     # root = '/Users/kcson/mywork/data/lpr_pre'
-    # root = '/Users/kcson/mywork/data/lpr_pre_auto_gen'
+    root = '/Users/kcson/mywork/data/lpr_pre_auto_gen'
     train_file_list = os.listdir(root)
 
     index = 0
@@ -21,10 +24,15 @@ def main():
     h_sum = 0
     w_sum = 0
     for file_name in train_file_list:
-        if index == 150:
-            break
+        # if index == 150:
+        #     break
         file_name = unicodedata.normalize('NFC', file_name)
         label = os.path.splitext(file_name)[0].split('-')[0]
+        label = eng_to_region(label)
+        label = eng_to_kor(label)
+        label = unicodedata.normalize('NFC', label)
+
+        print(label)
         # if len(label) > 8:
         #     continue
 
@@ -33,7 +41,7 @@ def main():
         #     continue
         print(full_path)
         try:
-            if crop_text(full_path, ''):
+            if crop_text(full_path, label):
                 index += 1
                 print('index : ', index)
         except Exception as e:
@@ -64,7 +72,7 @@ def crop_text(full_path, label=''):
     # detect.set_next(DetectYolo())
     detect.handle(chainParam)
 
-    # chainParam.dst = src
+    chainParam.dst = src
     if chainParam.dst is None:
         print('chainParam.dst is Non')
         # sys.exit()
@@ -78,9 +86,9 @@ def crop_text(full_path, label=''):
     src = cv.resize(chainParam.dst, (new_width, new_height))
 
     src_bin = cv.cvtColor(src, cv.COLOR_BGR2GRAY)
-    src_bin = cv.GaussianBlur(src_bin, (0, 0), 3, sigmaY=0, borderType=cv.BORDER_DEFAULT)
+    src_bin_g = cv.GaussianBlur(src_bin, (0, 0), 3, sigmaY=0, borderType=cv.BORDER_DEFAULT)
     # src_bin = cv.adaptiveThreshold(src_bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 4)
-    thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU, dst=src_bin)
+    thres, _ = cv.threshold(src_bin_g, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU, dst=src_bin)
     kernel = cv.getStructuringElement(cv.MORPH_RECT, (6, 6))
     # src_bin = cv.dilate(src_bin, kernel, iterations=1)
     # src_bin = cv.erode(src_bin, kernel, iterations=2)
@@ -112,7 +120,7 @@ def crop_text(full_path, label=''):
     boxes = check_area_diff(boxes, min_thres=0.1, max_thres=3.5)
 
     # box merge
-    boxes = merge_box(boxes)
+    boxes, row_index = merge_box(boxes)
 
     # 기타 유효 하지 않은 box 제거
     boxes = remove_invalid_box(boxes, min_area=2500)
@@ -126,17 +134,33 @@ def crop_text(full_path, label=''):
     # 면적이 다른 box 와 차이가 많이 나는 box 제거
     boxes = check_area_diff(boxes, min_thres=0.5, max_thres=2.0)
 
+    if row_index == 1:
+        thres, _ = cv.threshold(src_bin_g, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU, dst=src_bin)
+
     for i, box in enumerate(boxes, start=1):
         x, y, w, h = box
         print('area : ', h * w, ' ratio : ', w / h)
-        cv.rectangle(src, (x, y, w, h), (0, 0, 255), thickness=1)
-        cv.putText(src, str(i), (x, y), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv.LINE_AA)
+        # cv.rectangle(src, (x, y, w, h), (0, 0, 255), thickness=1)
+        # cv.putText(src, str(i), (x, y), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv.LINE_AA)
+
+        train_image = src_bin[y:y + h, x:x + w]
+        train_image = cv.resize(train_image, (80, 160))
+        train_path = os.path.join(train_root, label[i - 1])
+        try:
+            file_count = len(os.listdir(train_path))
+        except:
+            file_count = 0
+            os.mkdir(train_path)
+
+        train_path = os.path.join(train_path, '{}.jpeg'.format(file_count + 1))
+        print(train_path, " : ", file_count)
+        cv.imwrite(train_path, train_image)
 
     # recognition_text(boxes, src_bin)
-    cv.imshow('src_bin', src_bin)
-    cv.imshow('src', src)
-    cv.waitKey()
-    cv.destroyAllWindows()
+    # cv.imshow('src_bin', src_bin)
+    # cv.imshow('src', src)
+    # cv.waitKey()
+    # cv.destroyAllWindows()
 
     if label != '' and len(label) != len(boxes):
         return False
@@ -275,11 +299,13 @@ def get_is_next_box(box1, box2, boxes) -> bool:
 
 
 def merge_box(boxes):
+    return_row_index = 1
     index = 0
     merged_boxes = []
     while index < len(boxes):
         merge_box_count, row_index = get_merge_box_count(index, boxes)
         if row_index == 0:
+            return_row_index = 0
             start_box = boxes[index]
             for i in range(index + 1, index + merge_box_count):
                 start_box = merge(start_box, boxes[i])
@@ -333,7 +359,7 @@ def merge_box(boxes):
                 continue
         result_boxes.append(box1)
         index += 1
-    return result_boxes
+    return result_boxes, return_row_index
 
 
 def get_merge_box_count(index, boxes):
@@ -455,6 +481,95 @@ def remove_invalid_box(boxes, min_area=2500, max_area=70000, min_ratio=0.95):
         valid_boxes.append(box)
 
     return valid_boxes
+
+
+# 자음-초성/종성
+cons = {'r': 'ㄱ', 'R': 'ㄲ', 's': 'ㄴ', 'e': 'ㄷ', 'E': 'ㄸ', 'f': 'ㄹ', 'a': 'ㅁ', 'q': 'ㅂ', 'Q': 'ㅃ', 't': 'ㅅ', 'T': 'ㅆ',
+        'd': 'ㅇ', 'w': 'ㅈ', 'W': 'ㅉ', 'c': 'ㅊ', 'z': 'ㅋ', 'x': 'ㅌ', 'v': 'ㅍ', 'g': 'ㅎ'}
+# 모음-중성
+vowels = {'k': 'ㅏ', 'o': 'ㅐ', 'i': 'ㅑ', 'O': 'ㅒ', 'j': 'ㅓ', 'p': 'ㅔ', 'u': 'ㅕ', 'P': 'ㅖ', 'h': 'ㅗ', 'hk': 'ㅘ', 'ho': 'ㅙ', 'hl': 'ㅚ',
+          'y': 'ㅛ', 'n': 'ㅜ', 'nj': 'ㅝ', 'np': 'ㅞ', 'nl': 'ㅟ', 'b': 'ㅠ', 'm': 'ㅡ', 'ml': 'ㅢ', 'l': 'ㅣ'}
+# 자음-종성
+cons_double = {'rt': 'ㄳ', 'sw': 'ㄵ', 'sg': 'ㄶ', 'fr': 'ㄺ', 'fa': 'ㄻ', 'fq': 'ㄼ', 'ft': 'ㄽ', 'fx': 'ㄾ', 'fv': 'ㄿ', 'fg': 'ㅀ', 'qt': 'ㅄ'}
+
+
+# A = 서울 B = 경기 C = 인천 D = 강원 E = 충남, F = 대전 G = 충북 H = 부산 I = 울산 J =대구 K = 경북 L = 경남 M = 전남 N = 광주 O = 전북 P = 제주
+def eng_to_region(text):
+    text = text.replace('A', '서울'). \
+        replace('B', '경기'). \
+        replace('C', '인천'). \
+        replace('D', '강원'). \
+        replace('E', '충남'). \
+        replace('F', '대전'). \
+        replace('G', '충북'). \
+        replace('H', '부산'). \
+        replace('I', '울산'). \
+        replace('J', '대구'). \
+        replace('K', '경북'). \
+        replace('L', '경남'). \
+        replace('M', '전남'). \
+        replace('N', '광주'). \
+        replace('O', '전북'). \
+        replace('P', '제주')
+
+    text = text.replace('Z', '').replace('X', '')
+
+    return text
+
+
+def eng_to_kor(text):
+    result = ''  # 영 > 한 변환 결과
+
+    # 1. 해당 글자가 자음인지 모음인지 확인
+    vc = ''
+    for t in text:
+        if t in cons:
+            vc += 'c'
+        elif t in vowels:
+            vc += 'v'
+        else:
+            vc += '!'
+
+    # cvv → fVV / cv → fv / cc → dd
+    vc = vc.replace('cvv', 'fVV').replace('cv', 'fv').replace('cc', 'dd')
+
+    # 2. 자음 / 모음 / 두글자 자음 에서 검색
+    i = 0
+    while i < len(text):
+        v = vc[i]
+        t = text[i]
+
+        j = 1
+        # 한글일 경우
+        try:
+            if v == 'f' or v == 'c':  # 초성(f) & 자음(c) = 자음
+                result += cons[t]
+
+            elif v == 'V':  # 더블 모음
+                result += vowels[text[i:i + 2]]
+                j += 1
+
+            elif v == 'v':  # 모음
+                result += vowels[t]
+
+            elif v == 'd':  # 더블 자음
+                result += cons_double[text[i:i + 2]]
+                j += 1
+            else:
+                result += t
+
+        # 한글이 아닐 경우
+        except:
+            if v in cons:
+                result += cons[t]
+            elif v in vowels:
+                result += vowels[t]
+            else:
+                result += t
+
+        i += j
+
+    return compose(result)
 
 
 if __name__ == "__main__":
