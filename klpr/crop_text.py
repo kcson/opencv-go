@@ -140,8 +140,8 @@ def crop_text(full_path, label=''):
     for i, box in enumerate(boxes, start=1):
         x, y, w, h = box
         print('area : ', h * w, ' ratio : ', w / h)
-        # cv.rectangle(src, (x, y, w, h), (0, 0, 255), thickness=1)
-        # cv.putText(src, str(i), (x, y), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv.LINE_AA)
+        cv.rectangle(src, (x, y, w, h), (0, 0, 255), thickness=1)
+        cv.putText(src, str(i), (x, y), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv.LINE_AA)
 
         train_image = src_bin[y:y + h, x:x + w]
         train_image = cv.resize(train_image, (80, 160))
@@ -157,10 +157,10 @@ def crop_text(full_path, label=''):
         cv.imwrite(train_path, train_image)
 
     # recognition_text(boxes, src_bin)
-    # cv.imshow('src_bin', src_bin)
-    # cv.imshow('src', src)
-    # cv.waitKey()
-    # cv.destroyAllWindows()
+    cv.imshow('src_bin', src_bin)
+    cv.imshow('src', src)
+    cv.waitKey()
+    cv.destroyAllWindows()
 
     if label != '' and len(label) != len(boxes):
         return False
@@ -380,6 +380,9 @@ def get_merge_box_count(index, boxes):
                         break
                 if overlap_x:
                     break
+            if box1[2] / box1[3] < 0.2 and get_row_index(box1,boxes) == 0:
+                max_index = i
+                break
 
     row_index = get_row_index(start_boxs[len(start_boxs) - 1], boxes)
 
@@ -573,5 +576,5 @@ def eng_to_kor(text):
 
 
 if __name__ == "__main__":
-    main()
-    # crop_text('/Users/kcson/mywork/data/lpr_pre_auto_gen/Z04dh5052X.jpg')
+    # main()
+    crop_text('/Users/kcson/mywork/data/lpr_pre_auto_gen/P33sn6293X.jpg', '제주33누6293')
