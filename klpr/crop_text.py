@@ -88,10 +88,16 @@ def crop_text(full_path, label=''):
     src_bin = cv.cvtColor(src, cv.COLOR_BGR2GRAY)
     src_bin_g = cv.GaussianBlur(src_bin, (0, 0), 3, sigmaY=0, borderType=cv.BORDER_DEFAULT)
     # src_bin = cv.adaptiveThreshold(src_bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 4)
-    thres, _ = cv.threshold(src_bin_g, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU, dst=src_bin)
+    thres, _ = cv.threshold(src_bin_g, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU, dst=src_bin)
     kernel = cv.getStructuringElement(cv.MORPH_RECT, (6, 6))
     # src_bin = cv.dilate(src_bin, kernel, iterations=1)
     # src_bin = cv.erode(src_bin, kernel, iterations=2)
+
+    # src_bin = cv.inRange(src, (150, 150, 150), (255, 255, 255))
+    # thres, _ = cv.threshold(src_bin, 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU, dst=src_bin)
+
+    cv.imshow('src_bin', src_bin)
+    cv.waitKey()
 
     contours, _ = cv.findContours(src_bin, cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
 
@@ -137,12 +143,19 @@ def crop_text(full_path, label=''):
     if row_index == 1:
         thres, _ = cv.threshold(src_bin_g, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU, dst=src_bin)
 
+    # boxes.pop(0)
+    # boxes.pop(4)
+    # temp = merge(boxes[2],boxes[3])
+    # boxes[2] = temp
+    # boxes.pop(3)
     for i, box in enumerate(boxes, start=1):
         x, y, w, h = box
         print('area : ', h * w, ' ratio : ', w / h)
         cv.rectangle(src, (x, y, w, h), (0, 0, 255), thickness=1)
         cv.putText(src, str(i), (x, y), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv.LINE_AA)
 
+        if i > len(label)-1:
+            continue
         train_image = src_bin[y:y + h, x:x + w]
         train_image = cv.resize(train_image, (80, 160))
         train_path = os.path.join(train_root, label[i - 1])
@@ -577,4 +590,4 @@ def eng_to_kor(text):
 
 if __name__ == "__main__":
     # main()
-    crop_text('/Users/kcson/mywork/data/lpr_pre_auto_gen/P33sn6293X.jpg', '제주33누6293')
+    crop_text('/Users/kcson/mywork/data/lpr_sample/vehicle45.jpeg', '경기38더5484')
