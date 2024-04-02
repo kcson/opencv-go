@@ -11,7 +11,7 @@ root_dir = os.listdir(root)
 #     if sub_dir.startswith('.'):
 #         continue
 # sub_dir = os.path.join(root, sub_dir)
-sub_dir = os.path.join(root, '울-1')
+sub_dir = os.path.join(root, '경기')
 file_index = 1
 augment_file_index = 1001
 while file_index <= 500:
@@ -45,7 +45,7 @@ while file_index <= 500:
         cut_image = cv.copyMakeBorder(src, 0, 0, 0, cut_length, cv.BORDER_CONSTANT, value=(255, 255, 255))
         cut_image = cut_image[:, cut_length:]
 
-    dilate_iter = randint(1, 3)
+    dilate_iter = randint(0, 0)
     dilate_image = cv.dilate(cut_image, None, iterations=dilate_iter)
 
     # cv.imshow('cut_image', cut_image)
